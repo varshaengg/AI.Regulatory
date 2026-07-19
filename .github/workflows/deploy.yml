@@ -106,7 +106,7 @@ jobs:
           az deployment sub what-if \
             --location ${{ vars.AZURE_REGION }} \
             --template-file deploy/bicep/main.bicep \
-            --parameters deploy/bicep/parameters.example.json \
+            --parameters deploy/bicep/parameters.${{ inputs.environment || 'dev' }}.json \
             --parameters environmentName=$TARGET_ENV \
                          project=${{ vars.PROJECT }} \
                          location=${{ vars.AZURE_REGION }} \
@@ -145,7 +145,7 @@ jobs:
             --location ${{ vars.AZURE_REGION }} \
             --name "ara-$TARGET_ENV-${{ github.run_number }}" \
             --template-file deploy/bicep/main.bicep \
-            --parameters deploy/bicep/parameters.example.json \
+            --parameters deploy/bicep/parameters.${{ inputs.environment || 'dev' }}.json \
             --parameters environmentName=$TARGET_ENV \
                          project=${{ vars.PROJECT }} \
                          location=${{ vars.AZURE_REGION }} \
