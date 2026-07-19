@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName":  { "value": "dev" },
+    "project":          { "value": "RA" },
+    "location":         { "value": "westus" },
+    "sizingTier":       { "value": "small" },
+
+    "resources": {
+      "value": [
+        { "kind": "logAnalytics" },
+        { "kind": "appInsights" },
+        { "kind": "keyVault" },
+        { "kind": "storage" },
+        { "kind": "sqlServer" },
+        { "kind": "search" },
+        { "kind": "openAi" },
+        { "kind": "appServicePlan" },
+        { "kind": "appService", "feature": "web" },
+        { "kind": "appService", "feature": "api" }
+      ]
+    },
+
+    "publisherAcrLoginServer":  { "value": "stara.azurecr.io" },
+    "imageTag":                 { "value": "1.4.0" },
+    "deployerObjectId":         { "value": "" },
+    "sqlAadAdminGroupObjectId": { "value": "" },
+    "sqlAadAdminGroupName":     { "value": "SQL-ARA-Admins" }
+  }
+}

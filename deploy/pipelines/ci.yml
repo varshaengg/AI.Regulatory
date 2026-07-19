@@ -1,0 +1,107 @@
+# =============================================================================
+# ARA — Publisher CI pipeline
+# Triggers: every push / PR to main + release branches
+# Owner:    Publisher (Stara) engineering
+# =============================================================================
+name: ARA-CI-$(Date:yyyyMMdd)$(Rev:.rr)
+
+trigger:
+  branches:
+    include: [ main, release/* ]
+  paths:
+    exclude: [ deploy/docs/**, docs/**, '*.md' ]
+
+pr:
+  branches:
+    include: [ main ]
+
+variables:
+  dotnetVersion: '8.0.x'
+  solutionPath: 'src/RegulatoryAIAssistant.sln'
+  buildConfiguration: 'Release'
+  containerRegistry: 'stara.azurecr.io'
+
+stages:
+  - stage: Build
+    jobs:
+      - job: BuildAndTest
+        pool: { vmImage: 'ubuntu-latest' }
+        steps:
+          - task: UseDotNet@2
+            inputs: { packageType: 'sdk', version: $(dotnetVersion) }
+
+          - script: dotnet restore $(solutionPath)
+            displayName: 'Restore'
+
+          - script: dotnet build $(solutionPath) --configuration $(buildConfiguration) --no-restore
+            displayName: 'Build'
+
+          - script: |
+              dotnet test $(solutionPath) --configuration $(buildConfiguration) --no-build \
+                --collect:"XPlat Code Coverage" \
+                --logger trx --results-directory $(Agent.TempDirectory)/testresults
+            displayName: 'Unit tests + coverage'
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '$(Agent.TempDirectory)/testresults/*.trx'
+
+          - task: PublishCodeCoverageResults@2
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: '$(Agent.TempDirectory)/testresults/**/coverage.cobertura.xml'
+
+  - stage: StaticAnalysis
+    dependsOn: Build
+    jobs:
+      - job: SAST
+        pool: { vmImage: 'ubuntu-latest' }
+        steps:
+          - task: SonarCloudPrepare@2
+            inputs: { SonarCloud: 'sonar-stara', organization: 'stara', scannerMode: 'MSBuild', projectKey: 'stara_regulatory-ai-assistant' }
+          - script: dotnet build $(solutionPath) -c $(buildConfiguration)
+            displayName: 'Build for Sonar'
+          - task: SonarCloudAnalyze@2
+          - task: SonarCloudPublish@2
+
+          - task: CodeQL@1
+            inputs: { language: 'csharp' }
+
+          - script: dotnet list $(solutionPath) package --vulnerable --include-transitive
+            displayName: 'Vulnerable-package scan'
+
+  - stage: Container
+    dependsOn: StaticAnalysis
+    jobs:
+      - job: BuildContainer
+        pool: { vmImage: 'ubuntu-latest' }
+        steps:
+          - task: Docker@2
+            displayName: 'Build API image'
+            inputs:
+              command: 'build'
+              Dockerfile: 'src/ARA.Api/Dockerfile'
+              tags: |
+                $(containerRegistry)/ara-api:ci-$(Build.BuildId)
+
+          - script: |
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+              trivy image --severity CRITICAL,HIGH --exit-code 1 --ignore-unfixed \
+                $(containerRegistry)/ara-api:ci-$(Build.BuildId)
+            displayName: 'Trivy scan (fails on CRITICAL/HIGH)'
+
+  - stage: PublisherIntegration
+    dependsOn: Container
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployCi
+        pool: { vmImage: 'ubuntu-latest' }
+        environment: 'publisher-ci'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: echo "Deploy to publisher stara-ci sub, run smoke tests. TODO: implement."
+                  displayName: 'Deploy + smoke test (publisher CI subscription)'

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName":  { "value": "dev" },
+    "project":          { "value": "ra" },
+    "location":         { "value": "southindia" },
+    "sizingTier":       { "value": "dev" },
+
+    "resources": {
+      "value": [
+        { "kind": "logAnalytics" },
+        { "kind": "appInsights" },
+        { "kind": "storage" },
+        { "kind": "appServicePlan" },
+        { "kind": "appService", "feature": "web" },
+        { "kind": "appService", "feature": "api" }
+      ]
+    },
+
+    "publisherAcrLoginServer":  { "value": "" },
+    "imageTag":                 { "value": "" },
+    "deployerObjectId":         { "value": "" },
+    "sqlAadAdminGroupObjectId": { "value": "" },
+    "sqlAadAdminGroupName":     { "value": "" }
+  }
+}

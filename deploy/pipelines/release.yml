@@ -1,0 +1,139 @@
+# =============================================================================
+# ARA — Publisher release pipeline
+# Triggers: tag push matching v* on main
+# Produces: signed release feed entries (image, MSIX, Bicep zip, SBOM, manifest)
+# Owner:    Publisher (Stara) release management
+# =============================================================================
+name: ARA-Release-$(Build.SourceBranchName)
+
+trigger:
+  tags:
+    include: [ 'v*' ]
+
+pr: none
+
+variables:
+  releaseVersion: $[ replace(variables['Build.SourceBranchName'], 'v', '') ]
+  containerRegistry: 'stara.azurecr.io'
+  releaseFeedStorageAccount: 'starareleases'
+  releaseFeedContainer: 'releases'
+
+stages:
+  - stage: Approval
+    jobs:
+      - job: WaitForApproval
+        pool: server
+        timeoutInMinutes: 4320
+        steps:
+          - task: ManualValidation@1
+            inputs:
+              notifyUsers: 'head-of-engineering@stara.example, head-of-product@stara.example'
+              instructions: |
+                Approve release $(releaseVersion) for publication.
+                Check CI green on the tagged commit, release notes complete, SBOM reviewed.
+
+  - stage: SignAndPackage
+    dependsOn: Approval
+    jobs:
+      - job: Sign
+        pool: { vmImage: 'windows-latest' } # MSIX signing prefers Windows
+        steps:
+          - checkout: self
+          - task: DotNetCoreCLI@2
+            inputs: { command: 'restore', projects: 'src/RegulatoryAIAssistant.sln' }
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Build client (Release)'
+            inputs:
+              command: 'publish'
+              projects: 'src/ARA.Client.Wpf/ARA.Client.Wpf.csproj'
+              arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)/client'
+              publishWebProjects: false
+              zipAfterPublish: false
+
+          - task: MSBuild@1
+            displayName: 'Package MSIX'
+            inputs:
+              solution: 'src/ARA.Client.Msix/ARA.Client.Msix.wapproj'
+              configuration: 'Release'
+              msbuildArguments: >
+                /p:AppxBundle=Never
+                /p:AppxPackageDir=$(Build.ArtifactStagingDirectory)/msix/
+                /p:UapAppxPackageBuildMode=SideloadOnly
+
+          - task: EsrpCodeSigning@5
+            displayName: 'Sign MSIX + DLLs (EV cert via ESRP)'
+            inputs:
+              ConnectedServiceName: 'esrp-stara'
+              FolderPath: '$(Build.ArtifactStagingDirectory)'
+              Pattern: '*.msix,*.dll'
+              signConfigType: 'inlineSignParams'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'EF migration bundle'
+            inputs:
+              command: 'custom'
+              custom: 'ef'
+              arguments: >
+                migrations bundle
+                --project src/ARA.Infrastructure/ARA.Infrastructure.csproj
+                --startup-project src/ARA.Api/ARA.Api.csproj
+                --output $(Build.ArtifactStagingDirectory)/migrations/ara-efbundle-$(releaseVersion).exe
+                --self-contained -r linux-x64
+
+  - stage: PushArtifacts
+    dependsOn: SignAndPackage
+    jobs:
+      - job: Push
+        pool: { vmImage: 'ubuntu-latest' }
+        steps:
+          - task: AzureCLI@2
+            displayName: 'ACR build + push API image'
+            inputs:
+              azureSubscription: 'sc-stara-publisher'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az acr build --registry stara --image ara-api:$(releaseVersion) src/ARA.Api
+                az acr build --registry stara --image ara-workers:$(releaseVersion) src/ARA.Workers
+
+          - task: ArchiveFiles@2
+            displayName: 'Zip Bicep + scripts + docs'
+            inputs:
+              rootFolderOrFile: 'deploy'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/ara-deploy-$(releaseVersion).zip'
+
+          - script: |
+              curl -sSL https://github.com/microsoft/sbom-tool/releases/latest/download/sbom-tool-linux-x64 -o sbom-tool
+              chmod +x sbom-tool
+              ./sbom-tool generate -b $(Build.ArtifactStagingDirectory) -bc . -pn "AI Regulatory Assistant" -pv $(releaseVersion) -ps Stara
+            displayName: 'Generate SPDX SBOM'
+
+          - task: AzureCLI@2
+            displayName: 'Publish manifest + upload artifacts to release feed'
+            inputs:
+              azureSubscription: 'sc-stara-publisher'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                pwsh ./deploy/scripts/build-release-manifest.ps1 \
+                  -Version $(releaseVersion) \
+                  -InputDir $(Build.ArtifactStagingDirectory) \
+                  -OutFile $(Build.ArtifactStagingDirectory)/release-$(releaseVersion).json
+                az storage blob upload-batch \
+                  --account-name $(releaseFeedStorageAccount) \
+                  --destination $(releaseFeedContainer)/$(releaseVersion) \
+                  --source $(Build.ArtifactStagingDirectory) \
+                  --auth-mode login
+
+  - stage: Notify
+    dependsOn: PushArtifacts
+    jobs:
+      - job: NotifyCustomers
+        pool: { vmImage: 'ubuntu-latest' }
+        steps:
+          - script: echo "TODO: post release notes to support portal + notify customer mailing list"
+            displayName: 'Publish release announcement'

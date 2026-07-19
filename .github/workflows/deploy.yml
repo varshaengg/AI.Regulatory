@@ -1,0 +1,218 @@
+# =============================================================================
+# ARA — Deployment pipeline (GitHub Actions)
+# Mirrors deploy/pipelines/deploy.ado.yml.
+#
+# Resources are named by convention: <kindShort>-<project>-<env>-<regionShort>[-<feature>]
+#   e.g. app-RA-dev-wus-web, app-RA-dev-wus-api, rg-RA-dev-wus, sql-RA-dev-wus
+#
+# Required GitHub environment / repo secrets:
+#   AZURE_CLIENT_ID         SP / app registration client id (OIDC federated cred)
+#   AZURE_TENANT_ID         AAD tenant id
+#   AZURE_SUBSCRIPTION_ID   subscription to deploy into
+#   DEPLOYER_OBJECT_ID      object id of the SP (for Key Vault admin role)
+# Required repo variables (Settings > Variables > Actions):
+#   PROJECT                 short code (e.g. RA)
+#   AZURE_REGION            e.g. westus, westus2, westeurope
+#   PUBLISHER_ACR_LOGIN     publisher container registry (e.g. stara.azurecr.io)
+#   IMAGE_TAG               API container image tag (semver)
+# =============================================================================
+name: ARA Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        default: dev
+        options: [ dev, test, uat, prod ]
+  push:
+    branches: [ main ]
+    paths:
+      - 'api/**'
+      - 'src/**'
+      - 'deploy/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  id-token: write   # OIDC federation to Azure
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. Build API + Web in parallel.
+  # -------------------------------------------------------------------------
+  build-api:
+    name: Build & publish API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: dotnet publish
+        run: |
+          dotnet publish api/src/AI.Regulatory.API/AI.Regulatory.API.csproj \
+            -c Release -o ${{ runner.temp }}/api-publish
+      - name: Zip
+        run: |
+          cd ${{ runner.temp }}/api-publish
+          zip -r ${{ runner.temp }}/api.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-package
+          path: ${{ runner.temp }}/api.zip
+
+  build-web:
+    name: Build SPA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: npm ci + build
+        run: |
+          npm ci
+          npm run build
+      - name: Zip dist/
+        run: |
+          cd dist
+          zip -r ${{ runner.temp }}/web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-package
+          path: ${{ runner.temp }}/web.zip
+
+  # -------------------------------------------------------------------------
+  # 2. Bicep what-if preview
+  # -------------------------------------------------------------------------
+  whatif:
+    name: Bicep what-if
+    runs-on: ubuntu-latest
+    needs: [ build-api, build-web ]
+    environment: ara-${{ inputs.environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: az deployment sub what-if
+        run: |
+          az deployment sub what-if \
+            --location ${{ vars.AZURE_REGION }} \
+            --template-file deploy/bicep/main.bicep \
+            --parameters deploy/bicep/parameters.example.json \
+            --parameters environmentName=$TARGET_ENV \
+                         project=${{ vars.PROJECT }} \
+                         location=${{ vars.AZURE_REGION }} \
+                         publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
+                         imageTag=${{ vars.IMAGE_TAG }} \
+                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }}
+
+  # -------------------------------------------------------------------------
+  # 3. Deploy Bicep + both app services
+  # -------------------------------------------------------------------------
+  deploy:
+    name: Deploy infra + app services
+    runs-on: ubuntu-latest
+    needs: whatif
+    environment: ara-${{ inputs.environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: api-package, path: ./artifacts }
+      - uses: actions/download-artifact@v4
+        with: { name: web-package, path: ./artifacts }
+
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bicep deploy (subscription scope)
+        id: bicep
+        run: |
+          set -e
+          az deployment sub create \
+            --location ${{ vars.AZURE_REGION }} \
+            --name "ara-$TARGET_ENV-${{ github.run_number }}" \
+            --template-file deploy/bicep/main.bicep \
+            --parameters deploy/bicep/parameters.example.json \
+            --parameters environmentName=$TARGET_ENV \
+                         project=${{ vars.PROJECT }} \
+                         location=${{ vars.AZURE_REGION }} \
+                         publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
+                         imageTag=${{ vars.IMAGE_TAG }} \
+                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }}
+
+          RG=$(az deployment sub show --name "ara-$TARGET_ENV-${{ github.run_number }}" --query "properties.outputs.resourceGroupName.value" -o tsv)
+          NP=$(az deployment sub show --name "ara-$TARGET_ENV-${{ github.run_number }}" --query "properties.outputs.namePrefix.value" -o tsv)
+          echo "rg=$RG"        >> $GITHUB_OUTPUT
+          echo "api=app-$NP-api" >> $GITHUB_OUTPUT
+          echo "web=app-$NP-web" >> $GITHUB_OUTPUT
+
+      - name: Apply API app-settings (deploy/config/appsettings.api.${{ env.TARGET_ENV }}.json)
+        shell: pwsh
+        run: |
+          ./deploy/scripts/apply-appsettings.ps1 `
+            -ResourceGroup '${{ steps.bicep.outputs.rg }}' `
+            -AppName       '${{ steps.bicep.outputs.api }}' `
+            -EnvName       '${{ env.TARGET_ENV }}' `
+            -App           'api'
+
+      - name: Apply Web app-settings (if config present)
+        shell: pwsh
+        run: |
+          $cfg = "./deploy/config/appsettings.web.${{ env.TARGET_ENV }}.json"
+          if (Test-Path $cfg) {
+            ./deploy/scripts/apply-appsettings.ps1 `
+              -ResourceGroup '${{ steps.bicep.outputs.rg }}' `
+              -AppName       '${{ steps.bicep.outputs.web }}' `
+              -EnvName       '${{ env.TARGET_ENV }}' `
+              -App           'web'
+          } else {
+            Write-Host "No web app-settings file — skipping."
+          }
+
+      - name: Deploy API zip
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name:       ${{ steps.bicep.outputs.api }}
+          slot-name:      staging
+          resource-group-name: ${{ steps.bicep.outputs.rg }}
+          package:        ./artifacts/api.zip
+
+      - name: Deploy Web zip
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.bicep.outputs.web }}
+          resource-group-name: ${{ steps.bicep.outputs.rg }}
+          package:  ./artifacts/web.zip
+
+      - name: Smoke test API (staging slot)
+        run: |
+          set -e
+          HOST=$(az webapp show -g "${{ steps.bicep.outputs.rg }}" -n "${{ steps.bicep.outputs.api }}" --slot staging --query defaultHostName -o tsv)
+          for path in /health /health/live /health/ready; do
+            code=$(curl -sk -o /dev/null -w "%{http_code}" "https://$HOST$path")
+            if [ "$code" != "200" ]; then
+              echo "Smoke test failed: $path => $code"; exit 1
+            fi
+          done
+          echo "Smoke tests passed on staging slot."
+
+      - name: Blue/Green slot swap (non-dev)
+        if: env.TARGET_ENV != 'dev'
+        run: |
+          az webapp deployment slot swap \
+            --resource-group "${{ steps.bicep.outputs.rg }}" \
+            --name "${{ steps.bicep.outputs.api }}" \
+            --slot staging --target-slot production

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1440" />
+<title>ARA · Wireframes (Fluent 2)</title>
+<style>
+:root{
+  --brand:#0F6CBD; --brand-h:#115EA3; --brand-p:#0C3B5E; --brand-tint:#EBF3FA;
+  --n0:#FFFFFF; --n2:#FAFAFA; --n4:#F5F5F5; --n6:#F0F0F0; --n10:#E0E0E0; --n20:#D1D1D1; --n40:#ABABAB;
+  --t1:#242424; --t2:#424242; --t3:#616161; --t4:#707070;
+  --ok:#107C10; --warn:#F7630C; --danger:#C50F1F; --ok-tint:#DFF6DD; --warn-tint:#FFF4CE; --danger-tint:#FDE7E9;
+  --r-s:4px; --r-m:6px; --r-l:8px;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s10:40px;
+  --e4:0 2px 4px rgba(0,0,0,.10); --e8:0 4px 12px rgba(0,0,0,.12); --e16:0 8px 20px rgba(0,0,0,.14);
+  --f:'Segoe UI Variable Text','Segoe UI',-apple-system,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--n4);font-family:var(--f);color:var(--t1);font-size:14px;line-height:1.4}
+button{font-family:inherit;cursor:pointer}
+a{color:var(--brand);text-decoration:none}
+.app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.nav{background:var(--n0);border-right:1px solid var(--n10);padding:var(--s4) var(--s2);position:sticky;top:0;height:100vh;overflow-y:auto}
+.nav h1{font-size:14px;font-weight:600;color:var(--t1);margin:0 var(--s3) var(--s2)}
+.nav .sub{font-size:11px;color:var(--t3);margin:0 var(--s3) var(--s4)}
+.nav .grp{font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;padding:var(--s3) var(--s3) var(--s1)}
+.nav button{display:flex;align-items:center;gap:var(--s2);width:100%;text-align:left;background:transparent;border:0;color:var(--t2);font-size:13px;padding:var(--s2) var(--s3);border-radius:var(--r-m);margin:1px 0}
+.nav button:hover{background:var(--n4)}
+.nav button.on{background:var(--brand-tint);color:var(--brand-p);font-weight:600}
+.nav .k{width:28px;color:var(--t4);font-size:11px;font-variant-numeric:tabular-nums}
+.nav button.on .k{color:var(--brand)}
+.nav .star{color:var(--warn);margin-left:auto;font-size:11px}
+.canvas{padding:var(--s6) var(--s8);overflow:auto}
+.screen{display:none}
+.screen.on{display:block}
+.cap{background:var(--n0);border:1px solid var(--n10);border-radius:var(--r-l);padding:var(--s4) var(--s5);margin-bottom:var(--s5);box-shadow:var(--e4)}
+.cap .row{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.cap .id{font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums;font-weight:600}
+.cap .title{font-size:18px;font-weight:600;margin:0}
+.cap .badge{display:inline-flex;align-items:center;gap:var(--s1);padding:2px var(--s2);border-radius:var(--r-s);font-size:11px;font-weight:600}
+.b-adm{background:#EEE0FF;color:#5C2E91}
+.b-lead{background:var(--brand-tint);color:var(--brand-p)}
+.b-auth{background:#DFF6DD;color:#0B5A0B}
+.b-rev{background:#FFF4CE;color:#8A6100}
+.cap .step{font-size:12px;color:var(--t3)}
+.cap p{margin:var(--s2) 0 0;color:var(--t2);font-size:13px}
+/* window chrome for each screen */
+.frame{background:var(--n0);border:1px solid var(--n10);border-radius:var(--r-l);overflow:hidden;box-shadow:var(--e4)}
+.tbar{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--n10);background:var(--n2)}
+.tbar .logo{width:24px;height:24px;border-radius:var(--r-s);background:var(--brand);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700}
+.tbar .brand{font-weight:600;font-size:13px}
+.tbar .path{color:var(--t3);font-size:12px}
+.tbar .spacer{flex:1}
+.tbar .avatar{width:28px;height:28px;border-radius:50%;background:var(--brand-tint);color:var(--brand-p);display:grid;place-items:center;font-weight:600;font-size:11px}
+.pane{padding:var(--s5) var(--s6)}
+.h1{font-size:22px;font-weight:600;margin:0 0 var(--s2)}
+.sub{color:var(--t3);font-size:13px;margin:0 0 var(--s5)}
+.h2{font-size:16px;font-weight:600;margin:0 0 var(--s3)}
+.h3{font-size:13px;font-weight:600;margin:0 0 var(--s2);color:var(--t2)}
+
+/* controls */
+.btn{display:inline-flex;align-items:center;gap:var(--s2);padding:6px var(--s3);border-radius:var(--r-s);border:1px solid var(--n20);background:var(--n0);color:var(--t1);font-size:13px;font-weight:600}
+.btn:hover{background:var(--n4)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.pri:hover{background:var(--brand-h)}
+.btn.sub{border-color:transparent;color:var(--brand);font-weight:600}
+.btn.sub:hover{background:var(--brand-tint)}
+.btn.dz{border-style:dashed}
+.chip{display:inline-flex;align-items:center;gap:var(--s1);padding:2px var(--s2);border-radius:999px;font-size:11px;font-weight:600;background:var(--n6);color:var(--t2)}
+.chip.ok{background:var(--ok-tint);color:#0B5A0B}
+.chip.warn{background:var(--warn-tint);color:#8A6100}
+.chip.err{background:var(--danger-tint);color:#8A0F1A}
+.chip.brand{background:var(--brand-tint);color:var(--brand-p)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.err{background:var(--danger)} .dot.n{background:var(--n40)}
+.input,.select{border:1px solid var(--n20);border-radius:var(--r-s);padding:6px var(--s2);font:inherit;background:var(--n0);color:var(--t1);width:100%}
+.input:focus,.select:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:var(--brand)}
+.field{display:flex;flex-direction:column;gap:var(--s1);margin-bottom:var(--s3)}
+.field label{font-size:12px;font-weight:600;color:var(--t2)}
+.field .hint{font-size:11px;color:var(--t3)}
+.grid{display:grid;gap:var(--s4)}
+.cols-2{grid-template-columns:1fr 1fr}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+.cols-4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--n0);border:1px solid var(--n10);border-radius:var(--r-m);padding:var(--s4)}
+.stat{background:var(--n0);border:1px solid var(--n10);border-radius:var(--r-m);padding:var(--s4)}
+.stat .n{font-size:28px;font-weight:600;color:var(--t1);line-height:1.1}
+.stat .l{font-size:12px;color:var(--t3);margin-top:var(--s1)}
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th{text-align:left;font-weight:600;color:var(--t3);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:var(--s2) var(--s3);border-bottom:1px solid var(--n10);background:var(--n2)}
+.table td{padding:var(--s3);border-bottom:1px solid var(--n6);vertical-align:middle}
+.table tr:hover td{background:var(--n2)}
+.link{color:var(--brand);font-weight:600}
+.kbd{font-family:Consolas,'Cascadia Code',monospace;font-size:11px;background:var(--n6);border:1px solid var(--n10);border-radius:var(--r-s);padding:1px 5px;color:var(--t2)}
+.stepper{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s5)}
+.stepper .s{display:flex;align-items:center;gap:var(--s2);color:var(--t3);font-size:12px;font-weight:600}
+.stepper .s .n{width:22px;height:22px;border-radius:50%;background:var(--n6);color:var(--t3);display:grid;place-items:center;font-size:11px}
+.stepper .s.on{color:var(--brand-p)}
+.stepper .s.on .n{background:var(--brand);color:#fff}
+.stepper .s.done{color:var(--ok)}
+.stepper .s.done .n{background:var(--ok);color:#fff}
+.stepper .bar{height:2px;background:var(--n10);flex:1;max-width:60px}
+.stepper .bar.done{background:var(--ok)}
+
+/* module cards for L4 */
+.mods{display:grid;grid-template-columns:220px 1fr;gap:var(--s5);align-items:start}
+.modlist{display:flex;flex-direction:column;gap:var(--s1)}
+.modlist button{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:var(--r-m);padding:var(--s3);font:inherit;color:var(--t2)}
+.modlist button.on{background:var(--brand-tint);border-color:#B3D4EB;color:var(--brand-p)}
+.modlist button:hover:not(.on){background:var(--n4)}
+.modlist .m{font-weight:600;font-size:13px}
+.modlist .c{font-size:11px;color:var(--t3);display:block}
+.modlist button.on .c{color:var(--brand)}
+.modpane{display:flex;flex-direction:column;gap:var(--s4)}
+.dz{border:1.5px dashed var(--n20);border-radius:var(--r-m);padding:var(--s4);background:var(--n2);text-align:center;color:var(--t3);font-size:12px}
+.dz.act{border-color:var(--brand);background:var(--brand-tint);color:var(--brand-p)}
+
+/* review workspace (U1) */
+.rev{display:grid;grid-template-columns:280px 1fr 340px;gap:0;background:var(--n0);border:1px solid var(--n10);border-radius:var(--r-l);overflow:hidden;box-shadow:var(--e4);height:640px}
+.rev .col{overflow:hidden;display:flex;flex-direction:column}
+.rev .col+.col{border-left:1px solid var(--n10)}
+.rev .colhd{padding:var(--s3) var(--s4);border-bottom:1px solid var(--n10);background:var(--n2);font-size:12px;font-weight:600;color:var(--t2);display:flex;align-items:center;gap:var(--s2)}
+.rev .colbd{overflow:auto;flex:1;padding:var(--s3)}
+.rev .assn{padding:var(--s3);border:1px solid transparent;border-radius:var(--r-m);cursor:pointer;margin-bottom:var(--s1)}
+.rev .assn:hover{background:var(--n2)}
+.rev .assn.on{background:var(--brand-tint);border-color:#B3D4EB}
+.rev .assn .t{font-weight:600;font-size:13px;color:var(--t1)}
+.rev .assn .m{font-size:11px;color:var(--t3);margin-top:2px}
+.rev .assn .meta{display:flex;gap:var(--s2);margin-top:var(--s2);align-items:center}
+.rev .editor{padding:var(--s5);background:#FCFCFC;font-family:Georgia,serif;font-size:14px;line-height:1.6;color:#1a1a1a}
+.rev .editor h4{font-family:var(--f);font-size:15px;font-weight:600;color:var(--t1);margin:var(--s5) 0 var(--s2)}
+.rev .editor h4:first-child{margin-top:0}
+.rev .editor mark{background:#FFF4CE;padding:0 3px;border-bottom:2px solid var(--warn)}
+.rev .editor .cite{color:var(--brand);font-size:12px;vertical-align:super;font-family:var(--f);font-weight:600;cursor:pointer}
+.rev .copilot{background:var(--n2)}
+.rev .msg{background:var(--n0);border:1px solid var(--n10);border-radius:var(--r-m);padding:var(--s3);margin-bottom:var(--s3);font-size:12px}
+.rev .msg.me{background:var(--brand-tint);border-color:#B3D4EB;color:var(--brand-p)}
+.rev .msg .who{font-weight:600;font-size:11px;color:var(--t3);margin-bottom:var(--s1)}
+.rev .cite-card{background:var(--n0);border:1px solid var(--n10);border-radius:var(--r-m);padding:var(--s2) var(--s3);margin-top:var(--s2);font-size:11px;color:var(--t2)}
+.rev .cite-card .fn{color:var(--brand);font-weight:600}
+.rev .footer{padding:var(--s3);border-top:1px solid var(--n10);background:var(--n0);display:flex;gap:var(--s2)}
+.rev .ta{border:1px solid var(--n20);border-radius:var(--r-s);padding:var(--s2);font:inherit;font-size:12px;resize:none;flex:1;min-height:56px}
+
+/* progress bar */
+.prog{height:6px;background:var(--n6);border-radius:999px;overflow:hidden}
+.prog>span{display:block;height:100%;background:var(--brand);border-radius:999px}
+.prog.ok>span{background:var(--ok)}
+.prog.warn>span{background:var(--warn)}
+
+/* toolbar */
+.tools{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s4);flex-wrap:wrap}
+.tools .search{flex:1;max-width:360px;position:relative}
+.tools .search .input{padding-left:28px}
+.tools .search::before{content:"⌕";position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--t3)}
+.tools .spacer{flex:1}
+.tabs{display:flex;gap:var(--s1);border-bottom:1px solid var(--n10);margin-bottom:var(--s4)}
+.tabs .tab{padding:var(--s2) var(--s3);font-size:13px;font-weight:600;color:var(--t3);border:0;background:transparent;border-bottom:2px solid transparent;cursor:pointer}
+.tabs .tab.on{color:var(--brand);border-color:var(--brand)}
+.crumb{color:var(--t3);font-size:12px;margin-bottom:var(--s2)}
+.crumb .sep{margin:0 var(--s2);color:var(--n20)}
+.crumb b{color:var(--t2);font-weight:600}
+.split{display:grid;grid-template-columns:2fr 1fr;gap:var(--s5)}
+.log{font-family:Consolas,'Cascadia Code',monospace;font-size:12px;background:#0F1419;color:#D4D4D4;border-radius:var(--r-m);padding:var(--s4);max-height:320px;overflow:auto;line-height:1.6}
+.log .ts{color:#7A8A99} .log .ok{color:#4EC9B0} .log .warn{color:#DCDCAA} .log .err{color:#F48771} .log .info{color:#9CDCFE}
+.note{background:var(--brand-tint);border-left:3px solid var(--brand);padding:var(--s3) var(--s4);border-radius:var(--r-s);font-size:12px;color:var(--brand-p)}
+.note.warn{background:var(--warn-tint);border-color:var(--warn);color:#8A6100}
+.note.ok{background:var(--ok-tint);border-color:var(--ok);color:#0B5A0B}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="nav">
+    <h1>ARA · Wireframes</h1>
+    <div class="sub">Fluent 2 · React SPA + BFF · v1.5</div>
+
+    <div class="grp">Admin</div>
+    <button data-t="a1" class="on"><span class="k">A1</span> Admin home</button>
+    <button data-t="a2"><span class="k">A2</span> CTD Template Catalog</button>
+    <button data-t="a3"><span class="k">A3</span> Upload Template</button>
+    <button data-t="a4"><span class="k">A4</span> Project Sources</button>
+
+    <div class="grp">RA Lead</div>
+    <button data-t="l1"><span class="k">L1</span> Home dashboard</button>
+    <button data-t="l2"><span class="k">L2</span> Projects list</button>
+    <button data-t="l3"><span class="k">L3</span> Wizard · Basics</button>
+    <button data-t="l4"><span class="k">L4</span> Wizard · Modules<span class="star">★</span></button>
+    <button data-t="l5"><span class="k">L5</span> Wizard · Review</button>
+    <button data-t="l6"><span class="k">L6</span> Run detail live</button>
+
+    <div class="grp">RA Author</div>
+    <button data-t="u1"><span class="k">U1</span> Review Assignments<span class="star">★★</span></button>
+    <button data-t="u2"><span class="k">U2</span> Copilot focused</button>
+
+    <div class="grp">RA Reviewer</div>
+    <button data-t="r1"><span class="k">R1</span> Compiled Package</button>
+    <button data-t="r2"><span class="k">R2</span> Sign-off</button>
+  </aside>
+
+  <main class="canvas" id="canvas">
+    <!-- SCREEN A1 -->
+    <section class="screen on" data-s="a1">
+      <div class="cap">
+        <div class="row">
+          <span class="id">A1</span>
+          <span class="badge b-adm">Admin</span>
+          <h2 class="title">Admin home · Tenant setup at a glance</h2>
+        </div>
+        <p>Intent — Admin lands on a single control surface: template catalog health, storage bindings by country/region, LLM & Search endpoints, and outstanding onboarding tasks. Everything else is one click away.</p>
+      </div>
+      <div class="frame">
+        <div class="tbar"><div class="logo">A</div><div class="brand">ARA</div><span class="path">·  Admin</span><div class="spacer"></div><button class="btn">Docs</button><div class="avatar">SA</div></div>
+        <div class="pane">
+          <h1 class="h1">Welcome back, Sara</h1>
+          <p class="sub">Contoso Pharma · Tenant contoso.onmicrosoft.com · West Europe</p>
+
+          <div class="grid cols-4" style="margin-bottom:24px">
+            <div class="stat"><div class="n">42</div><div class="l">CTD templates</div></div>
+            <div class="stat"><div class="n">18</div><div class="l">Countries mapped</div></div>
+            <div class="stat"><div class="n">6</div><div class="l">Storage accounts</div></div>
+            <div class="stat"><div class="n">2</div><div class="l">Setup tasks pending</div></div>
+          </div>
+
+          <div class="grid cols-2">
+            <div class="card">
+              <h3 class="h2">Setup checklist</h3>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:center;gap:12px"><span class="dot ok"></span><div style="flex:1"><b>Entra ID app registration</b><div style="font-size:12px;color:var(--t3)">Configured · redirect URIs verified</div></div><span class="chip ok">Done</span></div>
+                <div style="display:flex;align-items:center;gap:12px"><span class="dot ok"></span><div style="flex:1"><b>Azure OpenAI endpoint</b><div style="font-size:12px;color:var(--t3)">gpt-4o · Sweden Central</div></div><span class="chip ok">Done</span></div>
+                <div style="display:flex;align-items:center;gap:12px"><span class="dot warn"></span><div style="flex:1"><b>AI Search index</b><div style="font-size:12px;color:var(--t3)">ara-eu index empty · reindex required</div></div><a class="link">Fix →</a></div>
+                <div style="display:flex;align-items:center;gap:12px"><span class="dot err"></span><div style="flex:1"><b>Storage binding · Germany</b><div style="font-size:12px;color:var(--t3)">Fallback to EU region template</div></div><a class="link">Map →</a></div>
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="h2">Recent activity</h3>
+              <table class="table">
+                <tbody>
+                  <tr><td><span class="chip brand">Template</span></td><td>EU · Module 3 v4.2 uploaded</td><td style="color:var(--t3)">2h ago</td></tr>
+                  <tr><td><span class="chip brand">Source</span></td><td>Product PX-102 · M3 mapped to blob container</td><td style="color:var(--t3)">Yesterday</td></tr>
+                  <tr><td><span class="chip">User</span></td><td>2 RA Authors added to project Elm-A</td><td style="color:var(--t3)">Mon</td></tr>
+                  <tr><td><span class="chip">Key</span></td><td>Search API key rotated</td><td style="color:var(--t3)">Nov 12</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Placeholders for the other 13 screens; filled next -->
+  </main>
+</div>
+<script>
+  const nav=document.querySelectorAll('.nav button[data-t]');
+  const scr=document.querySelectorAll('.screen');
+  nav.forEach(b=>b.addEventListener('click',()=>{
+    const t=b.dataset.t;
+    nav.forEach(x=>x.classList.toggle('on',x===b));
+    scr.forEach(s=>s.classList.toggle('on',s.dataset.s===t));
+    document.getElementById('canvas').scrollTo({top:0,behavior:'instant'});
+  }));
+</script>
+</body>
+</html>

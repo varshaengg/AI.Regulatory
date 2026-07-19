@@ -1,0 +1,56 @@
+# Template Configuration: microsoft-default
+# This file maps slide types to the template's layout names and placeholder indices.
+# Place this .yaml next to the .potx file with the same base name.
+
+# Layout mapping: slide type → layout name in the template
+# The script matches layout names case-insensitively using prefix matching.
+layouts:
+  title: "2_Title_Gradient_Warm Gray"
+  section: "Section_Gradient_Warm Gray"
+  content: "1-column_Text"
+  two-column: "2-column_Text_with Subheads"
+  table: "2_Custom Layout"
+  summary: "Summary page_Big headline"
+  ask: "2-column_Text_with Subheads"
+  blank: "Blank_with Head"
+
+# Placeholder mapping: slide type → placeholder index assignments
+# Each slide type lists which placeholder index to use for each content role.
+# Omit a role if the template has no placeholder for it (content falls back to manual).
+placeholders:
+  title:
+    title: 13        # Main title text
+    subtitle: 12     # Subtitle text
+
+  section:
+    title: 0         # Section heading
+    subtitle: 12     # Optional subtitle/body
+
+  content:
+    title: 0         # Slide title
+    body: 15         # Body text / bullet points
+
+  two-column:
+    title: 0         # Slide title
+    left_heading: 16 # Left column heading
+    left_body: 15    # Left column body text
+    right_heading: 19 # Right column heading
+    right_body: 20   # Right column body text
+
+  table:
+    title: 0         # Slide title
+    # Tables are always added manually — no placeholder mapping needed
+
+  summary:
+    title: 0         # Big headline (placed in title placeholder)
+    body: 15         # Supporting bullet points
+
+  ask:
+    title: 0         # Slide title
+    left_heading: 16 # "The Ask" heading
+    left_body: 15    # Ask text + rationale
+    right_heading: 19 # "Next Steps" heading
+    right_body: 20   # Next steps list
+
+  blank:
+    title: 0         # Slide title

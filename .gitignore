@@ -1,0 +1,34 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/slnx.sqlite
+/.vs/RegulatoryAIAssistant.slnx/FileContentIndex/44053c3a-ae61-44c4-9dde-45b7a2fc1923.vsidx
+/.vs/RegulatoryAIAssistant.slnx/FileContentIndex/ab6c6d11-6701-4d44-bba2-b0b7b5c279c9.vsidx
+/.vs/RegulatoryAIAssistant.slnx/FileContentIndex
+
+# Local env (contains real client IDs)
+.env.local
+
+# Node
+node_modules/
+dist/
+.pnpm-store/
+pnpm-lock.yaml
+
+# .NET
+**/bin/
+**/obj/
+**/*.user
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Deployment artifacts
+deploy/bicep/main.json

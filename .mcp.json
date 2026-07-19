@@ -1,0 +1,93 @@
+{
+	"servers": {
+		"bluebird-mcp": {
+			"url": "https://mcp.bluebird-ai.net/",
+			"type": "http",
+			"headers": {
+				"x-mcp-ec-organization": "ORG",
+				"x-mcp-ec-project": "PROJECT",
+				"x-mcp-ec-repository": "SINGLE REPO OR COMMA SEPERATED REPO LIST FOR CROSS QUERY",
+				"x-mcp-ec-branch": "BRANCH"
+			}
+		},
+		"workiq": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@microsoft/workiq",
+				"mcp"
+			]
+		},
+		"ado": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@azure-devops/mcp@next",
+				"microsoftit"
+			]
+		},
+		"microsoft-markitdown": {
+			"type": "stdio",
+			"command": "uvx",
+			"args": [
+				"markitdown-mcp==0.0.1a4"
+			]
+		},
+		"microsoft-docs-mcp": {
+			"url": "https://learn.microsoft.com/api/mcp",
+			"type": "http"
+		},
+		"deepwiki": {
+			"url": "https://mcp.deepwiki.com/sse"
+		},
+		"context7": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@upstash/context7-mcp"
+			]
+		},
+		"icm-mcp": {
+			"type": "http",
+			"url": "https://icm-mcp-prod.azure-api.net/v1/"
+		},
+		"figma": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"figma-developer-mcp",
+				"--stdio"
+			],
+			"env": {
+				"FIGMA_API_KEY": "YOUR_FIGMA_PAT_TOKEN_HERE",
+				"PORT": "3334"
+			}
+		},
+		"Azure-MCP-Server": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@azure/mcp@latest",
+				"server",
+				"start"
+			],
+			"type": "stdio"
+		},
+		"support-agent-mcp": {
+			"url": "https://afd-driagent-prod-01-endpoint-auc5gnhkhjbzbtdp.b02.azurefd.net/mcp/",
+			"type": "http"
+		},
+		"Service-360-and-Breeze": {
+			"type": "http",
+			"url": "https://mcp.vnext.s360.msftcloudes.com/"
+		},
+		"munin": {
+			"url": "https://munin-dev.azurewebsites.net/mcp/",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

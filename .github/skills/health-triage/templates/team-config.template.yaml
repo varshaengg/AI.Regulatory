@@ -1,0 +1,137 @@
+# Health Triage Agent — Team Configuration
+# {teamName}
+# Generated: {currentDate} by Health Triage Agent onboarding
+#
+# Variable substitution key:
+#   {teamName}              — Human-readable team/service name
+#   {teamAlias}             — Short alias for file naming (lowercase, kebab-case)
+#   {appInsightsResourcePath} — Full Azure resource ID for App Insights
+#                              e.g. /subscriptions/8d5a74f2-.../resourceGroups/my-rg/providers/Microsoft.Insights/components/my-app-insights
+#   {subscriptionId}        — Azure subscription ID (GUID)
+#                              e.g. 8d5a74f2-98bf-466b-b33a-31a07f0256d9
+#   {reliabilityTarget}     — Reliability SLO (default: 99.95)
+#   {p95LatencySlaMs}       — P95 latency target in ms (default: 3000)
+#   {failureCountAlert}     — Failure alert threshold (default: 50)
+#   {exceptionCountAlert}   — Exception alert threshold (default: 100)
+#   {excludeOperationsYaml} — YAML list of operations to exclude
+#   {dependencyOwnersYaml}  — YAML map of dependency → team
+#   {adoOrganization}       — ADO org (default: microsoftit)
+#   {adoProject}            — ADO project for work items
+#   {adoAreaPath}           — Area path for Bug work items
+#                              e.g. OneITVSO\\BIC CXP\\ESE Delivery Management\\Your Team
+#   {adoRepository}         — Repository for code search and PRs
+#   {adoDefaultBranch}      — Default branch (default: main)
+#   {sqlSection}            — SQL block (omit if not configured)
+#   {excludeSource}         — Telemetry source to exclude (default: UX)
+#   {s360Section}           — S360 block (omit if not configured)
+#   {uiTelemetrySection}    — UI telemetry block (omit if not configured)
+
+team: {teamName}
+teamAlias: {teamAlias}
+
+appInsights:
+  resourcePath: {appInsightsResourcePath}  # e.g. /subscriptions/8d5a.../resourceGroups/my-rg/providers/Microsoft.Insights/components/my-app
+  subscription: {subscriptionId}  # e.g. 8d5a74f2-98bf-466b-b33a-31a07f0256d9
+
+thresholds:
+  reliabilityTarget: {reliabilityTarget}          # percent
+  p95LatencySlaMs: {p95LatencySlaMs}               # milliseconds
+  failureCountAlert: {failureCountAlert}           # failures per time window
+  exceptionCountAlert: {exceptionCountAlert}       # exceptions per time window
+
+# Default time window for scheduled scans (ISO 8601 duration)
+defaultTimeWindow: P1D              # 1 day
+
+# Operations to exclude from request failure analysis
+excludeOperations:
+{excludeOperationsYaml}
+
+# Dependency name → owning team mapping for IcM routing
+dependencyOwners:
+{dependencyOwnersYaml}
+
+# Azure DevOps configuration for Bug work items and PRs
+ado:
+  organization: {adoOrganization}
+  project: {adoProject}
+  areaPath: "{adoAreaPath}"  # e.g. "OneITVSO\\BIC CXP\\Your Team\\Sub Team"
+  repository: {adoRepository}
+  defaultBranch: {adoDefaultBranch}
+
+{sqlSection}
+
+# Telemetry filter
+telemetryFilter:
+  excludeSource: "{excludeSource}"
+
+# Wisdom configuration
+wisdom:
+  wisdomFileLocation: ".github/health-triage/wisdom/WISDOM.md"
+
+# Work item deduplication
+workItemDedup:
+  tag: "HealthTriage"
+  staleThresholdDays: 14
+
+{s360Section}
+
+{uiTelemetrySection}
+
+# ──────────────────────────────────────────────────────────────
+# Optional sections — substitute or remove before saving
+# ──────────────────────────────────────────────────────────────
+
+# {sqlSection} expands to (or is omitted entirely):
+#
+# sql:
+#   resourcePath: {sqlResourcePath}  # e.g. /subscriptions/8d5a.../providers/Microsoft.Sql/servers/my-server/databases/my-db
+
+# {s360Section} expands to (or is omitted entirely):
+#
+# s360:
+#   serviceId: "{serviceId}"  # e.g. 80833f13-5f2c-4299-8358-6bba367b6a01
+#   serviceName: "{serviceName}"
+#   teamGroupName: "{teamGroupName}"
+#   serviceGroupName: "{serviceGroupName}"
+#
+#   watchKpiIds:
+#     - "{kpiId}"
+#
+#   codeActionableKpiPatterns:
+#     - "CodeQL"
+#     - "Security Bugs"
+
+# {uiTelemetrySection} expands to (or is omitted entirely):
+#
+# uiTelemetry:
+#   logAnalytics:
+#     workspaceId: "{workspaceGuid}"  # e.g. e35e943b-47a6-4138-a7e3-f6163850d07f
+#     resourceId: "{fullArmResourceId}"  # e.g. /subscriptions/.../providers/microsoft.operationalinsights/workspaces/my-workspace
+#   appRoleName: "FxP-Client"  # AppRoleName that identifies your UI telemetry in the shared workspace
+#   perfMetricPrefix: "PerfMyApp"  # Prefix for UI perf markers in AppMetrics (e.g. PerfMyApp.LoadDashboard)
+#   reportsDir: ".github/ui-telemetry/reports"
+#   dependencyFilters:
+#     - pattern: "{backendPattern}"
+#       description: "{description}"
+#   telemetrySources:
+#     - sourceId: "{sourceIdentifier}"
+#       description: "{description}"
+#   noiseActions:
+#     - "{actionName}"
+#   highSignalActions:
+#     - "{actionName}"
+#     - "Component Governance"
+#     - "Open Source Vulnerabilities"
+#     - "deprecated"
+#
+#   packageFiles:
+#     - "package.json"
+#     - "Directory.Packages.props"
+#     - "*.csproj"
+#     - "Nuget.config"
+#
+#   teamAliases:
+#     - "{alias}"
+#
+#   ownedEnvironments:
+#     - "{environment}"
