@@ -84,10 +84,17 @@ stages:
           inputs: { versionSpec: '20.x' }
         - script: |
             npm ci
+            CFG="deploy/config/spa.$(targetEnv).env"
+            if [ -f "$CFG" ]; then
+              echo "Sourcing $CFG"
+              set -a; . "$CFG"; set +a
+            else
+              echo "WARNING: $CFG not found — building with no VITE_* overrides."
+            fi
             npm run build
             mkdir -p "$(webPublishDir)"
             cp -r dist/* "$(webPublishDir)/"
-          displayName: 'npm ci + npm run build'
+          displayName: 'npm ci + npm run build (per-env VITE_* config)'
         - task: ArchiveFiles@2
           inputs:
             rootFolderOrFile: '$(webPublishDir)'

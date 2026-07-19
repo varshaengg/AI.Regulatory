@@ -67,13 +67,24 @@ jobs:
   build-web:
     name: Build SPA
     runs-on: ubuntu-latest
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
-      - name: npm ci + build
+      - name: npm ci + build (with per-env VITE_* config)
         run: |
           npm ci
+          CFG="deploy/config/spa.${TARGET_ENV}.env"
+          if [ -f "$CFG" ]; then
+            echo "Sourcing $CFG"
+            set -a
+            . "$CFG"
+            set +a
+          else
+            echo "WARNING: $CFG not found — building with no VITE_* overrides."
+          fi
           npm run build
       - name: Zip dist/
         run: |
