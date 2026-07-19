@@ -1,7 +1,7 @@
 // Top app bar — shows the real signed-in Entra user with a sign-out menu.
 import * as React from "react";
 import { useState, useRef, useEffect } from "react";
-import { BookOpen, LogOut } from "lucide-react";
+import { BookOpen, LogOut, Menu } from "lucide-react";
 import { useMsal } from "@azure/msal-react";
 import { C, screenConfig, type PersonaKey } from "../design/tokens";
 import { Btn } from "../design/primitives";
@@ -18,9 +18,13 @@ function computeInitials(name?: string | null, username?: string | null): string
 export function AppBar({
   activeScreen,
   persona: _persona,
+  isMobile = false,
+  onToggleNav,
 }: {
   activeScreen: string;
   persona: PersonaKey;
+  isMobile?: boolean;
+  onToggleNav?: () => void;
 }) {
   const cfg = screenConfig[activeScreen];
   const { instance, accounts } = useMsal();
@@ -54,21 +58,38 @@ export function AppBar({
   return (
     <div style={{
       height: 48, display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "0 16px", backgroundColor: "white", borderBottom: `1px solid ${C.border1}`,
-      boxShadow: "0 2px 4px rgba(0,0,0,.06)", flexShrink: 0, zIndex: 10,
+      padding: "0 12px", backgroundColor: "white", borderBottom: `1px solid ${C.border1}`,
+      boxShadow: "0 2px 4px rgba(0,0,0,.06)", flexShrink: 0, zIndex: 40, gap: 8,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
+        {isMobile && (
+          <button
+            type="button"
+            onClick={onToggleNav}
+            aria-label="Toggle navigation"
+            style={{
+              width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
+              border: "none", background: "transparent", cursor: "pointer", color: C.text1,
+              borderRadius: 4, flexShrink: 0,
+            }}
+          >
+            <Menu size={18} />
+          </button>
+        )}
         <div style={{
           width: 24, height: 24, borderRadius: "4px", backgroundColor: C.brand,
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: "white", fontSize: "13px", fontWeight: 700,
+          color: "white", fontSize: "13px", fontWeight: 700, flexShrink: 0,
         }}>A</div>
-        <span style={{ fontWeight: 600, fontSize: "13px", color: C.text1 }}>ARA</span>
-        <span style={{ color: C.border2 }}>·</span>
-        <span style={{ fontSize: "13px", color: C.text3 }}>{cfg.title}</span>
+        <span style={{ fontWeight: 600, fontSize: "13px", color: C.text1, flexShrink: 0 }}>ARA</span>
+        {!isMobile && <span style={{ color: C.border2 }}>·</span>}
+        <span style={{
+          fontSize: "13px", color: C.text3,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+        }}>{cfg.title}</span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", position: "relative" }} ref={menuRef}>
-        <Btn variant="secondary"><BookOpen size={13} />Docs</Btn>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", position: "relative", flexShrink: 0 }} ref={menuRef}>
+        {!isMobile && <Btn variant="secondary"><BookOpen size={13} />Docs</Btn>}
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}

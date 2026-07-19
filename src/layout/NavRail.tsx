@@ -3,11 +3,13 @@ import * as React from "react";
 import { Link } from "react-router";
 
 import { C, navGroups } from "../design/tokens";
-export function NavRail({ activeScreen }: { activeScreen: string }) {
+export function NavRail({ activeScreen, style }: { activeScreen: string; style?: React.CSSProperties }) {
   return (
     <div style={{
       width: 260, flexShrink: 0, display: "flex", flexDirection: "column",
       borderRight: `1px solid ${C.border1}`, backgroundColor: "white", overflowY: "auto",
+      height: "100%",
+      ...style,
     }}>
       <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border1}` }}>
         <div style={{ fontSize: "13px", fontWeight: 600, color: C.text1 }}>ARA · Wireframes</div>
