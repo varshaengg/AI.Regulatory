@@ -182,11 +182,20 @@ jobs:
             Write-Host "No web app-settings file — skipping."
           }
 
-      - name: Deploy API zip
+      - name: Deploy API zip (staging slot for non-dev)
+        if: env.TARGET_ENV != 'dev'
         uses: azure/webapps-deploy@v3
         with:
           app-name:       ${{ steps.bicep.outputs.api }}
           slot-name:      staging
+          resource-group-name: ${{ steps.bicep.outputs.rg }}
+          package:        ./artifacts/api.zip
+
+      - name: Deploy API zip (production slot for dev)
+        if: env.TARGET_ENV == 'dev'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name:       ${{ steps.bicep.outputs.api }}
           resource-group-name: ${{ steps.bicep.outputs.rg }}
           package:        ./artifacts/api.zip
 
@@ -197,17 +206,21 @@ jobs:
           resource-group-name: ${{ steps.bicep.outputs.rg }}
           package:  ./artifacts/web.zip
 
-      - name: Smoke test API (staging slot)
+      - name: Smoke test API
         run: |
           set -e
-          HOST=$(az webapp show -g "${{ steps.bicep.outputs.rg }}" -n "${{ steps.bicep.outputs.api }}" --slot staging --query defaultHostName -o tsv)
-          for path in /health /health/live /health/ready; do
+          if [ "$TARGET_ENV" = "dev" ]; then
+            HOST=$(az webapp show -g "${{ steps.bicep.outputs.rg }}" -n "${{ steps.bicep.outputs.api }}" --query defaultHostName -o tsv)
+          else
+            HOST=$(az webapp show -g "${{ steps.bicep.outputs.rg }}" -n "${{ steps.bicep.outputs.api }}" --slot staging --query defaultHostName -o tsv)
+          fi
+          for path in /health/live /health/ready; do
             code=$(curl -sk -o /dev/null -w "%{http_code}" "https://$HOST$path")
             if [ "$code" != "200" ]; then
               echo "Smoke test failed: $path => $code"; exit 1
             fi
           done
-          echo "Smoke tests passed on staging slot."
+          echo "Smoke tests passed."
 
       - name: Blue/Green slot swap (non-dev)
         if: env.TARGET_ENV != 'dev'
