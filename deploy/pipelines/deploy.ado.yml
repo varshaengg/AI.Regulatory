@@ -1,21 +1,18 @@
 # =============================================================================
 # ARA — Deployment pipeline (Azure DevOps)
-# Provisions infra (Bicep) + deploys API app service + Web (SPA) app service.
+# Provisions infra (Bicep, subscription scope) + deploys API + Web app services.
 #
-# Resources are named by convention: <kindShort>-<project>-<env>-<regionShort>[-<feature>]
-#   e.g. app-RA-dev-wus-web, app-RA-dev-wus-api, rg-RA-dev-wus, sql-RA-dev-wus
-#
-# HOW TO USE:
-#   1. Copy this file to `.azuredevops/deploy.yml` in your repo (rename & drop
-#      the `.template` suffix).
-#   2. Create variable group `ara-deploy` with:
-#        azureSubscription       ADO service connection (OIDC-federated)
-#        project                 short code, e.g. RA
-#        azureRegion             azure region, e.g. westus
-#        publisherAcrLoginServer stara.azurecr.io
-#        imageTag                container image tag for the API
-#        deployerObjectId        SP object id
-#   3. Set ADO Environment name to `ara-<env>` for approval gates.
+# Setup (one-time per project):
+#   1. Create ADO Service Connection of type "Azure Resource Manager" and
+#      name it `ara-azure` (or override via variable-group value below).
+#   2. Create Variable Group `ara-deploy` (Library) with:
+#        azureSubscription      = ara-azure           (name of the ARM SC above)
+#        project                = ra
+#        azureRegion            = southindia
+#        deployerObjectId       = <SP object id used by Bicep RBAC assignments>
+#        publisherAcrLoginServer= ''  (optional; leave empty for zip deploys)
+#        imageTag               = ''  (optional; leave empty for zip deploys)
+#   3. Create ADO Environment `ara-dev` (and other envs) for approval gates.
 # =============================================================================
 name: ARA-Deploy-$(Date:yyyyMMdd)$(Rev:.rr)
 
@@ -28,6 +25,8 @@ trigger:
       - src/**
       - deploy/**
       - package.json
+      - package-lock.json
+      - deploy/pipelines/deploy.ado.yml
 
 parameters:
   - name: targetEnv
@@ -44,12 +43,10 @@ variables:
     value: '$(Build.ArtifactStagingDirectory)/api'
   - name: webPublishDir
     value: '$(Build.ArtifactStagingDirectory)/web'
-  - name: rgName
-    value: 'rg-$(project)-${{ parameters.targetEnv }}-$(regionShort)'
-  - name: apiAppName
-    value: 'app-$(project)-${{ parameters.targetEnv }}-$(regionShort)-api'
-  - name: webAppName
-    value: 'app-$(project)-${{ parameters.targetEnv }}-$(regionShort)-web'
+  - name: paramFile
+    value: '$(Build.SourcesDirectory)/deploy/bicep/parameters.${{ parameters.targetEnv }}.json'
+  - name: deploymentName
+    value: 'ara-${{ parameters.targetEnv }}-$(Build.BuildId)'
 
 stages:
 # ---------------------------------------------------------------------------
@@ -83,8 +80,9 @@ stages:
         - task: NodeTool@0
           inputs: { versionSpec: '20.x' }
         - script: |
+            set -e
             npm ci
-            CFG="deploy/config/spa.$(targetEnv).env"
+            CFG="deploy/config/spa.${{ parameters.targetEnv }}.env"
             if [ -f "$CFG" ]; then
               echo "Sourcing $CFG"
               set -a; . "$CFG"; set +a
@@ -125,7 +123,7 @@ stages:
               az deployment sub what-if \
                 --location $(azureRegion) \
                 --template-file $(bicepDir)/main.bicep \
-                --parameters $(bicepDir)/parameters.example.json \
+                --parameters $(paramFile) \
                 --parameters environmentName=${{ parameters.targetEnv }} \
                              project=$(project) \
                              location=$(azureRegion) \
@@ -153,6 +151,7 @@ stages:
                 artifact: web-package
 
               - task: AzureCLI@2
+                name: bicep
                 displayName: 'Bicep deploy (subscription scope)'
                 inputs:
                   azureSubscription: $(azureSubscription)
@@ -162,31 +161,36 @@ stages:
                     set -e
                     az deployment sub create \
                       --location $(azureRegion) \
-                      --name "ara-${{ parameters.targetEnv }}-$(Build.BuildNumber)" \
+                      --name "$(deploymentName)" \
                       --template-file $(bicepDir)/main.bicep \
-                      --parameters $(bicepDir)/parameters.example.json \
+                      --parameters $(paramFile) \
                       --parameters environmentName=${{ parameters.targetEnv }} \
                                    project=$(project) \
                                    location=$(azureRegion) \
                                    publisherAcrLoginServer=$(publisherAcrLoginServer) \
                                    imageTag=$(imageTag) \
                                    deployerObjectId=$(deployerObjectId)
+                    RG=$(az deployment sub show --name "$(deploymentName)" --query "properties.outputs.resourceGroupName.value" -o tsv)
+                    NP=$(az deployment sub show --name "$(deploymentName)" --query "properties.outputs.namePrefix.value" -o tsv)
+                    echo "##vso[task.setvariable variable=rgName;isOutput=true]$RG"
+                    echo "##vso[task.setvariable variable=apiAppName;isOutput=true]app-$NP-api"
+                    echo "##vso[task.setvariable variable=webAppName;isOutput=true]app-$NP-web"
 
               - task: AzureCLI@2
-                displayName: 'Apply API app-settings from deploy/config/appsettings.api.${{ parameters.targetEnv }}.json'
+                displayName: 'Apply API app-settings (deploy/config/appsettings.api.${{ parameters.targetEnv }}.json)'
                 inputs:
                   azureSubscription: $(azureSubscription)
                   scriptType: pscore
                   scriptLocation: inlineScript
                   inlineScript: |
                     & "$(Build.SourcesDirectory)/deploy/scripts/apply-appsettings.ps1" `
-                      -ResourceGroup "$(rgName)" `
-                      -AppName       "$(apiAppName)" `
+                      -ResourceGroup "$(bicep.rgName)" `
+                      -AppName       "$(bicep.apiAppName)" `
                       -EnvName       "${{ parameters.targetEnv }}" `
                       -App           "api"
 
               - task: AzureCLI@2
-                displayName: 'Apply Web app-settings from deploy/config/appsettings.web.${{ parameters.targetEnv }}.json (if present)'
+                displayName: 'Apply Web app-settings (if present)'
                 condition: succeeded()
                 continueOnError: true
                 inputs:
@@ -197,51 +201,69 @@ stages:
                     $cfg = "$(Build.SourcesDirectory)/deploy/config/appsettings.web.${{ parameters.targetEnv }}.json"
                     if (Test-Path $cfg) {
                       & "$(Build.SourcesDirectory)/deploy/scripts/apply-appsettings.ps1" `
-                        -ResourceGroup "$(rgName)" `
-                        -AppName       "$(webAppName)" `
+                        -ResourceGroup "$(bicep.rgName)" `
+                        -AppName       "$(bicep.webAppName)" `
                         -EnvName       "${{ parameters.targetEnv }}" `
                         -App           "web"
                     } else {
                       Write-Host "No web app-settings file — skipping."
                     }
 
+              # ---- API zip deploy: prod slot for dev (B1 has no slots), staging slot otherwise
               - task: AzureWebApp@1
-                displayName: 'Deploy API zip -> $(apiAppName)'
+                displayName: 'Deploy API zip (production slot — dev)'
+                condition: and(succeeded(), eq('${{ parameters.targetEnv }}', 'dev'))
                 inputs:
                   azureSubscription: $(azureSubscription)
                   appType: 'webAppLinux'
-                  appName: '$(apiAppName)'
+                  appName: '$(bicep.apiAppName)'
+                  resourceGroupName: '$(bicep.rgName)'
+                  package: '$(Pipeline.Workspace)/api-package/api.zip'
+                  deploymentMethod: 'zipDeploy'
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy API zip (staging slot — non-dev)'
+                condition: and(succeeded(), ne('${{ parameters.targetEnv }}', 'dev'))
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  appType: 'webAppLinux'
+                  appName: '$(bicep.apiAppName)'
+                  resourceGroupName: '$(bicep.rgName)'
                   package: '$(Pipeline.Workspace)/api-package/api.zip'
                   deploymentMethod: 'zipDeploy'
                   deployToSlotOrASE: true
-                  resourceGroupName: '$(rgName)'
                   slotName: 'staging'
 
               - task: AzureWebApp@1
-                displayName: 'Deploy Web zip -> $(webAppName)'
+                displayName: 'Deploy Web zip -> $(bicep.webAppName)'
                 inputs:
                   azureSubscription: $(azureSubscription)
                   appType: 'webAppLinux'
-                  appName: '$(webAppName)'
+                  appName: '$(bicep.webAppName)'
+                  resourceGroupName: '$(bicep.rgName)'
                   package: '$(Pipeline.Workspace)/web-package/web.zip'
                   deploymentMethod: 'zipDeploy'
 
               - task: AzureCLI@2
-                displayName: 'Smoke test API (staging slot)'
+                displayName: 'Smoke test API'
                 inputs:
                   azureSubscription: $(azureSubscription)
                   scriptType: bash
                   scriptLocation: inlineScript
                   inlineScript: |
                     set -e
-                    HOST=$(az webapp show -g "$(rgName)" -n "$(apiAppName)" --slot staging --query defaultHostName -o tsv)
-                    for path in /health /health/live /health/ready; do
+                    if [ "${{ parameters.targetEnv }}" = "dev" ]; then
+                      HOST=$(az webapp show -g "$(bicep.rgName)" -n "$(bicep.apiAppName)" --query defaultHostName -o tsv)
+                    else
+                      HOST=$(az webapp show -g "$(bicep.rgName)" -n "$(bicep.apiAppName)" --slot staging --query defaultHostName -o tsv)
+                    fi
+                    for path in /health/live /health/ready; do
                       code=$(curl -sk -o /dev/null -w "%{http_code}" "https://$HOST$path")
                       if [ "$code" != "200" ]; then
                         echo "Smoke test failed: $path => $code"; exit 1
                       fi
                     done
-                    echo "Smoke tests passed on staging slot."
+                    echo "Smoke tests passed."
 
               - task: AzureCLI@2
                 displayName: 'Blue/Green slot swap (non-dev)'
@@ -252,6 +274,6 @@ stages:
                   scriptLocation: inlineScript
                   inlineScript: |
                     az webapp deployment slot swap \
-                      --resource-group "$(rgName)" \
-                      --name "$(apiAppName)" \
+                      --resource-group "$(bicep.rgName)" \
+                      --name "$(bicep.apiAppName)" \
                       --slot staging --target-slot production
