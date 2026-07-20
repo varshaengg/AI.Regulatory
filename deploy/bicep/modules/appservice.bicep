@@ -58,9 +58,6 @@ var telemetrySettings = empty(appInsightsConnString) ? [] : [
 ]
 
 var apiOnlySettings = isWeb ? [] : concat(
-  [
-    { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
-  ],
   empty(keyVaultUri)        ? [] : [ { name: 'KeyVault__Uri',              value: keyVaultUri } ],
   empty(sqlConnectionKvRef) ? [] : [ { name: 'ConnectionStrings__ArtaSql', value: sqlConnectionKvRef } ],
   empty(openAiEndpoint)     ? [] : [ { name: 'AzureOpenAi__Endpoint',      value: openAiEndpoint } ],
