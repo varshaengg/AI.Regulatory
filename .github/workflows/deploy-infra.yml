@@ -32,26 +32,35 @@ jobs:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build extraAppSettingsMap from deploy/config
-        id: cfg
-        run: |
-          set -e
-          MAP='{}'
-          for f in deploy/config/appsettings.*.${TARGET_ENV}.json; do
-            [ -f "$f" ] || continue
-            FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${TARGET_ENV}\.json$/\1/")
-            echo "Loading $FEATURE settings from $f"
-            MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
-          done
-          MINI=$(jq -c . <<<"$MAP")
-          echo "map<<EOF" >> $GITHUB_OUTPUT
-          echo "$MINI"    >> $GITHUB_OUTPUT
-          echo "EOF"      >> $GITHUB_OUTPUT
       - uses: azure/login@v2
         with:
           client-id:       ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build extraAppSettingsMap (preserving code-owned live values)
+        id: cfg
+        shell: pwsh
+        run: |
+          $rg = ''; $apiApp = ''; $webApp = ''
+          $latest = az deployment sub list `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            -o tsv 2>$null
+          if ($latest) {
+            $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+            $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
+            $apiApp = "app-$np-api"; $webApp = "app-$np-web"
+          }
+          $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+          $out = "$env:RUNNER_TEMP/extra.json"
+          & ./deploy/scripts/build-extra-app-settings.ps1 `
+            -TargetEnv     $env:TARGET_ENV `
+            -ResourceGroup $rg `
+            -AppNameMap    $nameMap `
+            -OutFile       $out
+          $mini = (Get-Content $out -Raw).Trim()
+          "map<<EOF"  | Out-File -Append $env:GITHUB_OUTPUT
+          $mini       | Out-File -Append $env:GITHUB_OUTPUT
+          "EOF"       | Out-File -Append $env:GITHUB_OUTPUT
       - name: az deployment sub what-if
         run: |
           az deployment sub what-if \
@@ -75,25 +84,35 @@ jobs:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build extraAppSettingsMap from deploy/config
-        id: cfg
-        run: |
-          set -e
-          MAP='{}'
-          for f in deploy/config/appsettings.*.${TARGET_ENV}.json; do
-            [ -f "$f" ] || continue
-            FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${TARGET_ENV}\.json$/\1/")
-            MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
-          done
-          MINI=$(jq -c . <<<"$MAP")
-          echo "map<<EOF" >> $GITHUB_OUTPUT
-          echo "$MINI"    >> $GITHUB_OUTPUT
-          echo "EOF"      >> $GITHUB_OUTPUT
       - uses: azure/login@v2
         with:
           client-id:       ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build extraAppSettingsMap (preserving code-owned live values)
+        id: cfg
+        shell: pwsh
+        run: |
+          $rg = ''; $apiApp = ''; $webApp = ''
+          $latest = az deployment sub list `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            -o tsv 2>$null
+          if ($latest) {
+            $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+            $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
+            $apiApp = "app-$np-api"; $webApp = "app-$np-web"
+          }
+          $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+          $out = "$env:RUNNER_TEMP/extra.json"
+          & ./deploy/scripts/build-extra-app-settings.ps1 `
+            -TargetEnv     $env:TARGET_ENV `
+            -ResourceGroup $rg `
+            -AppNameMap    $nameMap `
+            -OutFile       $out
+          $mini = (Get-Content $out -Raw).Trim()
+          "map<<EOF"  | Out-File -Append $env:GITHUB_OUTPUT
+          $mini       | Out-File -Append $env:GITHUB_OUTPUT
+          "EOF"       | Out-File -Append $env:GITHUB_OUTPUT
       - name: Bicep deploy (subscription scope)
         id: bicep
         run: |

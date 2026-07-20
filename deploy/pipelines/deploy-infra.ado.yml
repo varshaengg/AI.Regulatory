@@ -41,24 +41,39 @@ stages:
       pool: { vmImage: 'ubuntu-latest' }
       steps:
         - checkout: self
-        - task: Bash@3
-          displayName: 'Build extraAppSettingsMap from deploy/config'
+        - task: AzureCLI@2
+          displayName: 'Build extraAppSettingsMap (preserving code-owned live values)'
           name: cfg
           inputs:
-            targetType: inline
-            script: |
-              set -e
-              MAP='{}'
-              CFG_DIR="$(Build.SourcesDirectory)/deploy/config"
-              for f in "$CFG_DIR"/appsettings.*.${{ parameters.targetEnv }}.json; do
-                [ -f "$f" ] || continue
-                FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${{ parameters.targetEnv }}\.json$/\1/")
-                echo "Loading $FEATURE settings from $f"
-                MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
-              done
-              echo "$MAP" > "$(Agent.TempDirectory)/extra.json"
-              MINI=$(jq -c . "$(Agent.TempDirectory)/extra.json")
-              echo "##vso[task.setvariable variable=extraMap;isOutput=true]$MINI"
+            azureSubscription: $(azureSubscription)
+            scriptType: pscore
+            scriptLocation: inlineScript
+            inlineScript: |
+              # Look up existing app names (if any) so the script can preserve
+              # code-owned settings (feature flags etc.) through the Bicep replace.
+              $rg = ''; $apiApp = ''; $webApp = ''
+              $latest = az deployment sub list `
+                --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" `
+                -o tsv 2>$null
+              if ($latest) {
+                Write-Host "Found prior infra deployment: $latest"
+                $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+                $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
+                $apiApp = "app-$np-api"
+                $webApp = "app-$np-web"
+              } else {
+                Write-Host "Cold start — using seed values from *.code.<env>.json files."
+              }
+              $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+              $out = "$(Agent.TempDirectory)/extra.json"
+              & "$(Build.SourcesDirectory)/deploy/scripts/build-extra-app-settings.ps1" `
+                -TargetEnv     '${{ parameters.targetEnv }}' `
+                -ResourceGroup $rg `
+                -AppNameMap    $nameMap `
+                -OutFile       $out
+              $mini = (Get-Content $out -Raw).Trim()
+              Write-Host "extraAppSettingsMap = $mini"
+              Write-Host "##vso[task.setvariable variable=extraMap;isOutput=true]$mini"
         - task: AzureCLI@2
           displayName: 'az deployment sub what-if'
           inputs:
@@ -93,23 +108,32 @@ stages:
           deploy:
             steps:
               - checkout: self
-              - task: Bash@3
-                displayName: 'Build extraAppSettingsMap from deploy/config'
+              - task: AzureCLI@2
+                displayName: 'Build extraAppSettingsMap (preserving code-owned live values)'
                 name: cfg
                 inputs:
-                  targetType: inline
-                  script: |
-                    set -e
-                    MAP='{}'
-                    CFG_DIR="$(Build.SourcesDirectory)/deploy/config"
-                    for f in "$CFG_DIR"/appsettings.*.${{ parameters.targetEnv }}.json; do
-                      [ -f "$f" ] || continue
-                      FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${{ parameters.targetEnv }}\.json$/\1/")
-                      echo "Loading $FEATURE settings from $f"
-                      MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
-                    done
-                    MINI=$(jq -c . <<<"$MAP")
-                    echo "##vso[task.setvariable variable=extraMap;isOutput=true]$MINI"
+                  azureSubscription: $(azureSubscription)
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    $rg = ''; $apiApp = ''; $webApp = ''
+                    $latest = az deployment sub list `
+                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" `
+                      -o tsv 2>$null
+                    if ($latest) {
+                      $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+                      $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
+                      $apiApp = "app-$np-api"; $webApp = "app-$np-web"
+                    }
+                    $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+                    $out = "$(Agent.TempDirectory)/extra.json"
+                    & "$(Build.SourcesDirectory)/deploy/scripts/build-extra-app-settings.ps1" `
+                      -TargetEnv     '${{ parameters.targetEnv }}' `
+                      -ResourceGroup $rg `
+                      -AppNameMap    $nameMap `
+                      -OutFile       $out
+                    $mini = (Get-Content $out -Raw).Trim()
+                    Write-Host "##vso[task.setvariable variable=extraMap;isOutput=true]$mini"
               - task: AzureCLI@2
                 displayName: 'Bicep deploy (subscription scope)'
                 inputs:

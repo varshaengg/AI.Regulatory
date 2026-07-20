@@ -120,10 +120,24 @@ jobs:
           echo "api=app-$NP-api" >> $GITHUB_OUTPUT
           echo "web=app-$NP-web" >> $GITHUB_OUTPUT
 
-      - name: App-settings owned by infra pipeline (no-op)
+      - name: Apply code-owned API settings (deploy/config/appsettings.api.code.${{ env.TARGET_ENV }}.json)
+        shell: pwsh
         run: |
-          echo "App-settings (Cors, EntraId, WebApp.PublicUrl, etc.) are declared in Bicep via extraAppSettingsMap."
-          echo "Edit deploy/config/appsettings.<feature>.<env>.json and run the infra workflow to change them."
+          ./deploy/scripts/apply-appsettings.ps1 `
+            -ResourceGroup '${{ steps.lookup.outputs.rg }}' `
+            -AppName       '${{ steps.lookup.outputs.api }}' `
+            -EnvName       '${{ env.TARGET_ENV }}' `
+            -App           'api'
+
+      - name: Apply code-owned Web settings (if present)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          ./deploy/scripts/apply-appsettings.ps1 `
+            -ResourceGroup '${{ steps.lookup.outputs.rg }}' `
+            -AppName       '${{ steps.lookup.outputs.web }}' `
+            -EnvName       '${{ env.TARGET_ENV }}' `
+            -App           'web'
 
       - name: Deploy API zip (staging slot for non-dev)
         if: env.TARGET_ENV != 'dev'
