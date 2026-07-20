@@ -75,9 +75,11 @@ jobs:
           $srv   = "sql-$np"
           $fqdn  = az sql server show -g $rg -n $srv --query "fullyQualifiedDomainName" -o tsv
           $apiApp = "app-$np-api"
-          "sqlFqdn=$fqdn" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "apiApp=$apiApp" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "sqlFqdn=$fqdn  apiApp=$apiApp"
+          $apiMiOid = az webapp identity show -g $rg -n $apiApp --query "principalId" -o tsv
+          "sqlFqdn=$fqdn"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "apiApp=$apiApp"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "apiMiOid=$apiMiOid"| Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "sqlFqdn=$fqdn  apiApp=$apiApp  apiMiOid=$apiMiOid"
       - name: Install sqlpackage
         run: |
           dotnet tool install -g Microsoft.SqlPackage
@@ -100,6 +102,7 @@ jobs:
             /SourceFile:"$DAC" \
             /TargetConnectionString:"$CONN" \
             /Variables:ApiManagedIdentityName="${{ steps.cfg.outputs.apiApp }}" \
+            /Variables:ApiManagedIdentityObjectId="${{ steps.cfg.outputs.apiMiOid }}" \
             /p:BlockOnPossibleDataLoss=$BLOCK_DATA_LOSS \
             /p:DropObjectsNotInSource=false \
             /p:CreateNewDatabase=false

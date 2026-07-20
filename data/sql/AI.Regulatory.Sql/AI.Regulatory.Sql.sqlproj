@@ -19,5 +19,9 @@
       <DefaultValue></DefaultValue>
       <Value>$(SqlCmdVar__ApiManagedIdentityName)</Value>
     </SqlCmdVariable>
+    <SqlCmdVariable Include="ApiManagedIdentityObjectId">
+      <DefaultValue></DefaultValue>
+      <Value>$(SqlCmdVar__ApiManagedIdentityObjectId)</Value>
+    </SqlCmdVariable>
   </ItemGroup>
 </Project>

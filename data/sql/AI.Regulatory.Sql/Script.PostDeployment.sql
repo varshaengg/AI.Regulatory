@@ -125,17 +125,30 @@ WHEN NOT MATCHED BY TARGET THEN
 
 -- ---------------------------------------------------------------------------
 -- Bootstrap: contained user for API managed identity (optional)
+--
+-- Requires BOTH sqlcmd vars to be set:
+--   $(ApiManagedIdentityName)     — the SQL user name (usually the app name)
+--   $(ApiManagedIdentityObjectId) — the MI's AAD object id (guid)
+--
+-- Uses the SID form (CREATE USER ... WITH SID = ..., TYPE = E) which does NOT
+-- require the SQL server to have its own AAD MI + Directory Readers role.
+-- The SID is the raw 16-byte little-endian representation of the object id.
 -- ---------------------------------------------------------------------------
-IF N'$(ApiManagedIdentityName)' <> N''
+IF N'$(ApiManagedIdentityName)' <> N'' AND N'$(ApiManagedIdentityObjectId)' <> N''
 BEGIN
-    DECLARE @miName SYSNAME       = N'$(ApiManagedIdentityName)';
+    DECLARE @miName SYSNAME        = N'$(ApiManagedIdentityName)';
     DECLARE @miNameQ NVARCHAR(500) = QUOTENAME(@miName);
-    DECLARE @sql NVARCHAR(MAX);
+    DECLARE @miOid   UNIQUEIDENTIFIER = CAST(N'$(ApiManagedIdentityObjectId)' AS UNIQUEIDENTIFIER);
+    DECLARE @miSid   VARBINARY(85)    = CAST(@miOid AS VARBINARY(16));
+    DECLARE @sql     NVARCHAR(MAX);
 
     IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE [name] = @miName)
     BEGIN
-        SET @sql = N'CREATE USER ' + @miNameQ + N' FROM EXTERNAL PROVIDER;';
+        SET @sql = N'CREATE USER ' + @miNameQ +
+                   N' WITH SID = ' + CONVERT(NVARCHAR(200), @miSid, 1) +
+                   N', TYPE = E;';
         EXEC sys.sp_executesql @sql;
+        PRINT N'Created contained user ' + @miName + N' with SID=' + CONVERT(NVARCHAR(200), @miSid, 1);
     END
 
     SET @sql = N'ALTER ROLE db_datareader ADD MEMBER ' + @miNameQ + N';';
@@ -147,6 +160,6 @@ BEGIN
 END
 ELSE
 BEGIN
-    PRINT 'ApiManagedIdentityName not supplied - skipped MI contained-user bootstrap.';
+    PRINT 'ApiManagedIdentityName / ObjectId not both supplied - skipped MI contained-user bootstrap.';
 END
 GO
