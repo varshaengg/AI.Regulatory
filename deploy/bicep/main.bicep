@@ -159,7 +159,11 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
 // Delegate everything else to resources.bicep (RG scope)
 // -------------------------------------------------------------------------
 module workload 'resources.bicep' = {
-  name:  'ara-workload-${environmentName}'
+  // Suffix with a hash of the parent deployment name so a stuck/expired nested
+  // deployment (fixed name = 'ara-workload-<env>') never blocks the next run
+  // with DeploymentActive. Parent deployment name from the pipeline already
+  // includes the build id (e.g. ara-dev-42), so this is unique per run.
+  name:  'ara-workload-${environmentName}-${uniqueString(deployment().name)}'
   scope: rg
   params: {
     location:                   location
