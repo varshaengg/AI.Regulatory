@@ -139,37 +139,14 @@ stages:
                     echo "##vso[task.setvariable variable=webAppName;isOutput=true]$WEB"
 
               - task: AzureCLI@2
-                displayName: 'Apply API app-settings (deploy/config/appsettings.api.${{ parameters.targetEnv }}.json)'
+                displayName: 'App-settings owned by infra pipeline (no-op here)'
                 inputs:
                   azureSubscription: $(azureSubscription)
                   scriptType: pscore
                   scriptLocation: inlineScript
                   inlineScript: |
-                    & "$(Build.SourcesDirectory)/deploy/scripts/apply-appsettings.ps1" `
-                      -ResourceGroup "$(lookup.rgName)" `
-                      -AppName       "$(lookup.apiAppName)" `
-                      -EnvName       "${{ parameters.targetEnv }}" `
-                      -App           "api"
-
-              - task: AzureCLI@2
-                displayName: 'Apply Web app-settings (if present)'
-                condition: succeeded()
-                continueOnError: true
-                inputs:
-                  azureSubscription: $(azureSubscription)
-                  scriptType: pscore
-                  scriptLocation: inlineScript
-                  inlineScript: |
-                    $cfg = "$(Build.SourcesDirectory)/deploy/config/appsettings.web.${{ parameters.targetEnv }}.json"
-                    if (Test-Path $cfg) {
-                      & "$(Build.SourcesDirectory)/deploy/scripts/apply-appsettings.ps1" `
-                        -ResourceGroup "$(lookup.rgName)" `
-                        -AppName       "$(lookup.webAppName)" `
-                        -EnvName       "${{ parameters.targetEnv }}" `
-                        -App           "web"
-                    } else {
-                      Write-Host "No web app-settings file — skipping."
-                    }
+                    Write-Host "App-settings (Cors, EntraId, WebApp.PublicUrl, etc.) are now declared in Bicep via extraAppSettingsMap."
+                    Write-Host "Update deploy/config/appsettings.<feature>.<env>.json and run the infra pipeline to change them."
 
               # ---- API zip deploy: prod slot for dev (B1 has no slots), staging slot otherwise
               - task: AzureWebApp@1

@@ -75,6 +75,9 @@ param sqlAadAdminGroupObjectId string = ''
 @description('SQL admin AAD group display name')
 param sqlAadAdminGroupName string = ''
 
+@description('Map of feature -> array of extra appSettings entries. Pipeline builds this from deploy/config/appsettings.<feature>.<env>.json.')
+param extraAppSettingsMap object = {}
+
 // NOTE: `raAdminsGroupObjectId` (ARA Admin RBAC group) can be plumbed here once
 // role assignments to ARA app services are added to resources.bicep. Kept out
 // of the schema for now to avoid unused-param noise.
@@ -162,6 +165,7 @@ module workload 'resources.bicep' = {
     deployerObjectId:           deployerObjectId
     sqlAadAdminGroupObjectId:   sqlAadAdminGroupObjectId
     sqlAadAdminGroupName:       sqlAadAdminGroupName
+    extraAppSettingsMap:        extraAppSettingsMap
   }
 }
 

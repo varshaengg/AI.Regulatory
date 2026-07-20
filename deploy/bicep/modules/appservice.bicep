@@ -34,6 +34,9 @@ param openAiEndpoint string = ''
 param searchEndpoint string = ''
 param appInsightsConnString string = ''
 
+@description('Extra runtime app-settings merged into siteConfig.appSettings (e.g. CORS origins, Entra IDs, feature flags). Sourced from deploy/config/appsettings.<feature>.<env>.json by the pipeline.')
+param extraAppSettings array = []
+
 @description('If true, creates a staging deployment slot (requires Standard+ SKU).')
 param enableStagingSlot bool = true
 
@@ -69,7 +72,7 @@ var webOnlySettings = !isWeb ? [] : [
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
 ]
 
-var appSettings = concat(baseAppSettings, telemetrySettings, apiOnlySettings, webOnlySettings)
+var appSettings = concat(baseAppSettings, telemetrySettings, apiOnlySettings, webOnlySettings, extraAppSettings)
 
 resource site 'Microsoft.Web/sites@2024-04-01' = {
   name: appServiceName

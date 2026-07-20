@@ -32,6 +32,21 @@ jobs:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Build extraAppSettingsMap from deploy/config
+        id: cfg
+        run: |
+          set -e
+          MAP='{}'
+          for f in deploy/config/appsettings.*.${TARGET_ENV}.json; do
+            [ -f "$f" ] || continue
+            FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${TARGET_ENV}\.json$/\1/")
+            echo "Loading $FEATURE settings from $f"
+            MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
+          done
+          MINI=$(jq -c . <<<"$MAP")
+          echo "map<<EOF" >> $GITHUB_OUTPUT
+          echo "$MINI"    >> $GITHUB_OUTPUT
+          echo "EOF"      >> $GITHUB_OUTPUT
       - uses: azure/login@v2
         with:
           client-id:       ${{ secrets.AZURE_CLIENT_ID }}
@@ -48,7 +63,8 @@ jobs:
                          location=${{ vars.AZURE_REGION }} \
                          publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
                          imageTag=${{ vars.IMAGE_TAG }} \
-                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }}
+                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }} \
+                         extraAppSettingsMap='${{ steps.cfg.outputs.map }}'
 
   deploy:
     name: Bicep deploy
@@ -59,6 +75,20 @@ jobs:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Build extraAppSettingsMap from deploy/config
+        id: cfg
+        run: |
+          set -e
+          MAP='{}'
+          for f in deploy/config/appsettings.*.${TARGET_ENV}.json; do
+            [ -f "$f" ] || continue
+            FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${TARGET_ENV}\.json$/\1/")
+            MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
+          done
+          MINI=$(jq -c . <<<"$MAP")
+          echo "map<<EOF" >> $GITHUB_OUTPUT
+          echo "$MINI"    >> $GITHUB_OUTPUT
+          echo "EOF"      >> $GITHUB_OUTPUT
       - uses: azure/login@v2
         with:
           client-id:       ${{ secrets.AZURE_CLIENT_ID }}
@@ -79,6 +109,7 @@ jobs:
                          location=${{ vars.AZURE_REGION }} \
                          publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
                          imageTag=${{ vars.IMAGE_TAG }} \
-                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }}
+                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }} \
+                         extraAppSettingsMap='${{ steps.cfg.outputs.map }}'
           echo "Outputs:"
           az deployment sub show --name "$NAME" --query "properties.outputs" -o json

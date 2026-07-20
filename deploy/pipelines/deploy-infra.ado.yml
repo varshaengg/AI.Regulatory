@@ -41,6 +41,24 @@ stages:
       pool: { vmImage: 'ubuntu-latest' }
       steps:
         - checkout: self
+        - task: Bash@3
+          displayName: 'Build extraAppSettingsMap from deploy/config'
+          name: cfg
+          inputs:
+            targetType: inline
+            script: |
+              set -e
+              MAP='{}'
+              CFG_DIR="$(Build.SourcesDirectory)/deploy/config"
+              for f in "$CFG_DIR"/appsettings.*.${{ parameters.targetEnv }}.json; do
+                [ -f "$f" ] || continue
+                FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${{ parameters.targetEnv }}\.json$/\1/")
+                echo "Loading $FEATURE settings from $f"
+                MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
+              done
+              echo "$MAP" > "$(Agent.TempDirectory)/extra.json"
+              MINI=$(jq -c . "$(Agent.TempDirectory)/extra.json")
+              echo "##vso[task.setvariable variable=extraMap;isOutput=true]$MINI"
         - task: AzureCLI@2
           displayName: 'az deployment sub what-if'
           inputs:
@@ -58,7 +76,8 @@ stages:
                              location=$(azureRegion) \
                              publisherAcrLoginServer=$(publisherAcrLoginServer) \
                              imageTag=$(imageTag) \
-                             deployerObjectId=$(deployerObjectId)
+                             deployerObjectId=$(deployerObjectId) \
+                             extraAppSettingsMap='$(cfg.extraMap)'
 
 # ---------------------------------------------------------------------------
 # 2. Bicep deploy (subscription scope) — approval gated on ADO Environment.
@@ -74,6 +93,23 @@ stages:
           deploy:
             steps:
               - checkout: self
+              - task: Bash@3
+                displayName: 'Build extraAppSettingsMap from deploy/config'
+                name: cfg
+                inputs:
+                  targetType: inline
+                  script: |
+                    set -e
+                    MAP='{}'
+                    CFG_DIR="$(Build.SourcesDirectory)/deploy/config"
+                    for f in "$CFG_DIR"/appsettings.*.${{ parameters.targetEnv }}.json; do
+                      [ -f "$f" ] || continue
+                      FEATURE=$(basename "$f" | sed -E "s/^appsettings\.(.+)\.${{ parameters.targetEnv }}\.json$/\1/")
+                      echo "Loading $FEATURE settings from $f"
+                      MAP=$(jq --arg f "$FEATURE" --slurpfile v "$f" '. + {($f): $v[0]}' <<<"$MAP")
+                    done
+                    MINI=$(jq -c . <<<"$MAP")
+                    echo "##vso[task.setvariable variable=extraMap;isOutput=true]$MINI"
               - task: AzureCLI@2
                 displayName: 'Bicep deploy (subscription scope)'
                 inputs:
@@ -92,7 +128,8 @@ stages:
                                    location=$(azureRegion) \
                                    publisherAcrLoginServer=$(publisherAcrLoginServer) \
                                    imageTag=$(imageTag) \
-                                   deployerObjectId=$(deployerObjectId)
+                                   deployerObjectId=$(deployerObjectId) \
+                                   extraAppSettingsMap='$(cfg.extraMap)'
                     echo ""
                     echo "Outputs:"
                     az deployment sub show --name "$(deploymentName)" --query "properties.outputs" -o json

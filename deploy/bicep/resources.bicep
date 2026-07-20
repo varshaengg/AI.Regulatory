@@ -16,6 +16,9 @@ param deployerObjectId string
 param sqlAadAdminGroupObjectId string
 param sqlAadAdminGroupName string
 
+@description('Map of feature -> array of extra appSettings entries ({name,value}). Fed by the pipeline from deploy/config/appsettings.<feature>.<env>.json.')
+param extraAppSettingsMap object = {}
+
 // -------------------------------------------------------------------------
 // Sizing presets
 // -------------------------------------------------------------------------
@@ -218,6 +221,7 @@ module appServices 'modules/appservice.bicep' = [for (svc, i) in appServiceEntri
     openAiEndpoint:        openai.?outputs.openAiEndpoint ?? ''
     searchEndpoint:        search.?outputs.searchEndpoint ?? ''
     appInsightsConnString: monitoring.?outputs.appInsightsConnectionString ?? ''
+    extraAppSettings:      contains(extraAppSettingsMap, svc.feature) ? extraAppSettingsMap[svc.feature] : []
     enableStagingSlot:     !startsWith(s.appServiceSku, 'B')
   }
 }]
