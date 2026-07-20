@@ -1,0 +1,84 @@
+# =============================================================================
+# ARA — Infrastructure pipeline (GitHub Actions)
+# Bicep what-if + subscription-scope deploy. Does NOT touch app code.
+# Sibling of .github/workflows/deploy-code.yml.
+# =============================================================================
+name: ARA Infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        default: dev
+        options: [ dev, test, uat, prod ]
+  push:
+    branches: [ main ]
+    paths:
+      - 'deploy/bicep/**'
+      - '.github/workflows/deploy-infra.yml'
+
+permissions:
+  id-token: write   # OIDC federation to Azure
+  contents: read
+
+jobs:
+  whatif:
+    name: Bicep what-if
+    runs-on: ubuntu-latest
+    environment: ara-${{ inputs.environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: az deployment sub what-if
+        run: |
+          az deployment sub what-if \
+            --location ${{ vars.AZURE_REGION }} \
+            --template-file deploy/bicep/main.bicep \
+            --parameters deploy/bicep/parameters.${{ inputs.environment || 'dev' }}.json \
+            --parameters environmentName=$TARGET_ENV \
+                         project=${{ vars.PROJECT }} \
+                         location=${{ vars.AZURE_REGION }} \
+                         publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
+                         imageTag=${{ vars.IMAGE_TAG }} \
+                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }}
+
+  deploy:
+    name: Bicep deploy
+    runs-on: ubuntu-latest
+    needs: whatif
+    environment: ara-${{ inputs.environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Bicep deploy (subscription scope)
+        id: bicep
+        run: |
+          set -e
+          NAME="ara-$TARGET_ENV-${{ github.run_id }}"
+          az deployment sub create \
+            --location ${{ vars.AZURE_REGION }} \
+            --name "$NAME" \
+            --template-file deploy/bicep/main.bicep \
+            --parameters deploy/bicep/parameters.${{ inputs.environment || 'dev' }}.json \
+            --parameters environmentName=$TARGET_ENV \
+                         project=${{ vars.PROJECT }} \
+                         location=${{ vars.AZURE_REGION }} \
+                         publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
+                         imageTag=${{ vars.IMAGE_TAG }} \
+                         deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }}
+          echo "Outputs:"
+          az deployment sub show --name "$NAME" --query "properties.outputs" -o json

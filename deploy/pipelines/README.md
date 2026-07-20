@@ -5,10 +5,29 @@ infra from `deploy/bicep/main.bicep`, apply per-env app-settings from
 `deploy/config/appsettings.<app>.<env>.json` via
 `deploy/scripts/apply-appsettings.ps1`, deploy the API + Web zips, and smoke test.
 
-| Pipeline | Runs on | YAML file |
+Each CI system has **two independent pipelines** — one for infra and one for
+app code — so you can iterate on the SPA/API without re-running Bicep, and
+vice versa.
+
+| Purpose | GitHub Actions | Azure DevOps |
 |---|---|---|
-| GitHub Actions | GitHub-hosted runners | `.github/workflows/deploy.yml` |
-| Azure DevOps  | ADO Microsoft-hosted agents | `deploy/pipelines/deploy.ado.yml` |
+| Infra (Bicep what-if + deploy) | `.github/workflows/deploy-infra.yml` | `deploy/pipelines/deploy-infra.ado.yml` |
+| Code (build + zip deploy + smoke + swap) | `.github/workflows/deploy-code.yml` | `deploy/pipelines/deploy-code.ado.yml` |
+
+Path filters:
+
+- **Infra** pipelines trigger on `deploy/bicep/**` (plus their own YAML).
+- **Code** pipelines trigger on `api/**`, `src/**`, `deploy/config/**`,
+  `deploy/scripts/**`, `package*.json` (plus their own YAML).
+
+Cold start order: **run infra first**, then code. The code pipeline resolves
+resource names by reading the outputs of the most recent
+`ara-<env>-*` subscription-scope deployment; it fails fast with a clear
+message if none exists yet.
+
+Sub-scope Bicep deployments are always **incremental** — resources removed
+from `main.bicep` are not automatically deleted. Prune manually with
+`az resource delete` when needed.
 
 Pick whichever CI system your org is standardised on — you can enable either
 or both. They read the same Bicep, config, and scripts.

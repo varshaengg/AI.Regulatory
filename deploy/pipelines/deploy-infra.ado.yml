@@ -1,0 +1,98 @@
+# =============================================================================
+# ARA — Infrastructure pipeline (Azure DevOps)
+# Bicep what-if + subscription-scope deploy. Does NOT touch app code.
+# Sibling of deploy-code.ado.yml (code deployment lives there).
+#
+# Trigger: any change under deploy/bicep/** (or manual run).
+# =============================================================================
+name: ARA-Infra-$(Date:yyyyMMdd)$(Rev:.rr)
+
+trigger:
+  branches:
+    include: [ main ]
+  paths:
+    include:
+      - deploy/bicep/**
+      - deploy/pipelines/deploy-infra.ado.yml
+
+parameters:
+  - name: targetEnv
+    displayName: 'Target environment'
+    type: string
+    default: 'dev'
+    values: [ dev, test, uat, prod ]
+
+variables:
+  - group: ara-deploy
+  - name: bicepDir
+    value: '$(Build.SourcesDirectory)/deploy/bicep'
+  - name: paramFile
+    value: '$(Build.SourcesDirectory)/deploy/bicep/parameters.${{ parameters.targetEnv }}.json'
+  - name: deploymentName
+    value: 'ara-${{ parameters.targetEnv }}-$(Build.BuildId)'
+
+stages:
+# ---------------------------------------------------------------------------
+# 1. Bicep what-if preview (no deploy)
+# ---------------------------------------------------------------------------
+- stage: WhatIf
+  jobs:
+    - job: WhatIfPreview
+      pool: { vmImage: 'ubuntu-latest' }
+      steps:
+        - checkout: self
+        - task: AzureCLI@2
+          displayName: 'az deployment sub what-if'
+          inputs:
+            azureSubscription: $(azureSubscription)
+            scriptType: bash
+            scriptLocation: inlineScript
+            inlineScript: |
+              set -e
+              az deployment sub what-if \
+                --location $(azureRegion) \
+                --template-file $(bicepDir)/main.bicep \
+                --parameters $(paramFile) \
+                --parameters environmentName=${{ parameters.targetEnv }} \
+                             project=$(project) \
+                             location=$(azureRegion) \
+                             publisherAcrLoginServer=$(publisherAcrLoginServer) \
+                             imageTag=$(imageTag) \
+                             deployerObjectId=$(deployerObjectId)
+
+# ---------------------------------------------------------------------------
+# 2. Bicep deploy (subscription scope) — approval gated on ADO Environment.
+# ---------------------------------------------------------------------------
+- stage: Deploy
+  dependsOn: WhatIf
+  jobs:
+    - deployment: DeployInfra
+      environment: 'ara-${{ parameters.targetEnv }}'
+      pool: { vmImage: 'ubuntu-latest' }
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - checkout: self
+              - task: AzureCLI@2
+                displayName: 'Bicep deploy (subscription scope)'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    set -e
+                    az deployment sub create \
+                      --location $(azureRegion) \
+                      --name "$(deploymentName)" \
+                      --template-file $(bicepDir)/main.bicep \
+                      --parameters $(paramFile) \
+                      --parameters environmentName=${{ parameters.targetEnv }} \
+                                   project=$(project) \
+                                   location=$(azureRegion) \
+                                   publisherAcrLoginServer=$(publisherAcrLoginServer) \
+                                   imageTag=$(imageTag) \
+                                   deployerObjectId=$(deployerObjectId)
+                    echo ""
+                    echo "Outputs:"
+                    az deployment sub show --name "$(deploymentName)" --query "properties.outputs" -o json

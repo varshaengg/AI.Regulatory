@@ -1,0 +1,192 @@
+# =============================================================================
+# ARA — Code pipeline (GitHub Actions)
+# Builds API + SPA, applies app-settings, zip-deploys both app services,
+# runs a smoke test, and (non-dev) swaps staging -> production.
+# Does NOT run Bicep. Reads resource names from the latest sub-scope
+# deployment (`ara-<env>-*`).
+# =============================================================================
+name: ARA Code
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        default: dev
+        options: [ dev, test, uat, prod ]
+  push:
+    branches: [ main ]
+    paths:
+      - 'api/**'
+      - 'src/**'
+      - 'deploy/config/**'
+      - 'deploy/scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-code.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-api:
+    name: Build & publish API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: dotnet publish
+        run: |
+          dotnet publish api/src/AI.Regulatory.API/AI.Regulatory.API.csproj \
+            -c Release -o "${{ runner.temp }}/api-publish"
+      - name: Zip
+        run: |
+          cd ${{ runner.temp }}/api-publish
+          zip -r ${{ runner.temp }}/api.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-package
+          path: ${{ runner.temp }}/api.zip
+
+  build-web:
+    name: Build SPA
+    runs-on: ubuntu-latest
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: npm ci + build (with per-env VITE_* config)
+        run: |
+          set -e
+          npm ci
+          CFG="deploy/config/spa.${TARGET_ENV}.env"
+          if [ -f "$CFG" ]; then
+            echo "Sourcing $CFG"
+            set -a
+            . "$CFG"
+            set +a
+          else
+            echo "WARNING: $CFG not found — building with no VITE_* overrides."
+          fi
+          npm run build
+      - name: Zip dist/
+        run: |
+          cd dist
+          zip -r ${{ runner.temp }}/web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-package
+          path: ${{ runner.temp }}/web.zip
+
+  deploy:
+    name: Deploy code + app-settings
+    runs-on: ubuntu-latest
+    needs: [ build-api, build-web ]
+    environment: ara-${{ inputs.environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: api-package, path: ./artifacts }
+      - uses: actions/download-artifact@v4
+        with: { name: web-package, path: ./artifacts }
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve resource names from latest infra deployment
+        id: lookup
+        run: |
+          set -e
+          LATEST=$(az deployment sub list \
+            --query "sort_by([?starts_with(name, 'ara-${TARGET_ENV}-')], &properties.timestamp)[-1].name" \
+            -o tsv)
+          if [ -z "$LATEST" ]; then
+            echo "ERROR: no sub-scope deployment 'ara-${TARGET_ENV}-*' found. Run the infra workflow first."
+            exit 1
+          fi
+          echo "Latest infra deployment: $LATEST"
+          RG=$(az deployment sub show --name "$LATEST" --query "properties.outputs.resourceGroupName.value" -o tsv)
+          NP=$(az deployment sub show --name "$LATEST" --query "properties.outputs.namePrefix.value" -o tsv)
+          echo "rg=$RG"          >> $GITHUB_OUTPUT
+          echo "api=app-$NP-api" >> $GITHUB_OUTPUT
+          echo "web=app-$NP-web" >> $GITHUB_OUTPUT
+
+      - name: Apply API app-settings (deploy/config/appsettings.api.${{ env.TARGET_ENV }}.json)
+        shell: pwsh
+        run: |
+          ./deploy/scripts/apply-appsettings.ps1 `
+            -ResourceGroup '${{ steps.lookup.outputs.rg }}' `
+            -AppName       '${{ steps.lookup.outputs.api }}' `
+            -EnvName       '${{ env.TARGET_ENV }}' `
+            -App           'api'
+
+      - name: Apply Web app-settings (if config present)
+        shell: pwsh
+        run: |
+          $cfg = "./deploy/config/appsettings.web.${{ env.TARGET_ENV }}.json"
+          if (Test-Path $cfg) {
+            ./deploy/scripts/apply-appsettings.ps1 `
+              -ResourceGroup '${{ steps.lookup.outputs.rg }}' `
+              -AppName       '${{ steps.lookup.outputs.web }}' `
+              -EnvName       '${{ env.TARGET_ENV }}' `
+              -App           'web'
+          } else {
+            Write-Host "No web app-settings file — skipping."
+          }
+
+      - name: Deploy API zip (staging slot for non-dev)
+        if: env.TARGET_ENV != 'dev'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name:       ${{ steps.lookup.outputs.api }}
+          slot-name:      staging
+          resource-group-name: ${{ steps.lookup.outputs.rg }}
+          package:        ./artifacts/api.zip
+
+      - name: Deploy API zip (production slot for dev)
+        if: env.TARGET_ENV == 'dev'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name:       ${{ steps.lookup.outputs.api }}
+          resource-group-name: ${{ steps.lookup.outputs.rg }}
+          package:        ./artifacts/api.zip
+
+      - name: Deploy Web zip
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.lookup.outputs.web }}
+          resource-group-name: ${{ steps.lookup.outputs.rg }}
+          package:  ./artifacts/web.zip
+
+      - name: Smoke test API
+        run: |
+          set -e
+          if [ "$TARGET_ENV" = "dev" ]; then
+            HOST=$(az webapp show -g "${{ steps.lookup.outputs.rg }}" -n "${{ steps.lookup.outputs.api }}" --query defaultHostName -o tsv)
+          else
+            HOST=$(az webapp show -g "${{ steps.lookup.outputs.rg }}" -n "${{ steps.lookup.outputs.api }}" --slot staging --query defaultHostName -o tsv)
+          fi
+          for path in /health/live /health/ready; do
+            code=$(curl -sk -o /dev/null -w "%{http_code}" "https://$HOST$path")
+            if [ "$code" != "200" ]; then
+              echo "Smoke test failed: $path => $code"; exit 1
+            fi
+          done
+          echo "Smoke tests passed."
+
+      - name: Blue/Green slot swap (non-dev)
+        if: env.TARGET_ENV != 'dev'
+        run: |
+          az webapp deployment slot swap \
+            --resource-group "${{ steps.lookup.outputs.rg }}" \
+            --name "${{ steps.lookup.outputs.api }}" \
+            --slot staging --target-slot production
