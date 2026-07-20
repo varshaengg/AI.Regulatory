@@ -5,25 +5,26 @@ infra from `deploy/bicep/main.bicep`, apply per-env app-settings from
 `deploy/config/appsettings.<app>.<env>.json` via
 `deploy/scripts/apply-appsettings.ps1`, deploy the API + Web zips, and smoke test.
 
-Each CI system has **two independent pipelines** — one for infra and one for
-app code — so you can iterate on the SPA/API without re-running Bicep, and
-vice versa.
+Each CI system has **three independent pipelines** — infra, code, and SQL —
+so you can iterate on schema/SPA/API without re-running everything.
 
 | Purpose | GitHub Actions | Azure DevOps |
 |---|---|---|
-| Infra (Bicep what-if + deploy) | `.github/workflows/deploy-infra.yml` | `deploy/pipelines/deploy-infra.ado.yml` |
-| Code (build + zip deploy + smoke + swap) | `.github/workflows/deploy-code.yml` | `deploy/pipelines/deploy-code.ado.yml` |
+| Infra (Bicep what-if + deploy)          | `.github/workflows/deploy-infra.yml` | `deploy/pipelines/deploy-infra.ado.yml` |
+| Code (build + zip deploy + smoke + swap)| `.github/workflows/deploy-code.yml`  | `deploy/pipelines/deploy-code.ado.yml`  |
+| SQL (DACPAC build + publish + seed)     | `.github/workflows/deploy-sql.yml`   | `deploy/pipelines/deploy-sql.ado.yml`   |
 
 Path filters:
 
 - **Infra** pipelines trigger on `deploy/bicep/**` (plus their own YAML).
 - **Code** pipelines trigger on `api/**`, `src/**`, `deploy/config/**`,
   `deploy/scripts/**`, `package*.json` (plus their own YAML).
+- **SQL** pipelines trigger on `data/sql/**` (plus their own YAML).
 
-Cold start order: **run infra first**, then code. The code pipeline resolves
-resource names by reading the outputs of the most recent
-`ara-<env>-*` subscription-scope deployment; it fails fast with a clear
-message if none exists yet.
+Cold start order: **infra → sql → code**. The code pipeline resolves resource
+names by reading the outputs of the most recent `ara-<env>-*` subscription-scope
+deployment; SQL pipeline does the same. Both fail fast with a clear message
+if no prior infra deployment exists.
 
 Sub-scope Bicep deployments are always **incremental** — resources removed
 from `main.bicep` are not automatically deleted. Prune manually with
@@ -83,6 +84,31 @@ Pipelines UI with `targetEnv` parameter.
 |---|---|
 | `deploy/bicep/main.bicep` (+ `resources.bicep` + `modules/`) | Infra as code |
 | `deploy/bicep/parameters.<env>.json` | Per-env Bicep parameter values |
-| `deploy/config/appsettings.api.<env>.json` | API app-settings applied by both pipelines |
-| `deploy/config/appsettings.web.<env>.json` | Optional Web app-settings (auto-skipped if absent) |
-| `deploy/scripts/apply-appsettings.ps1` | Reusable script called by both pipelines |
+| `deploy/config/appsettings.<app>.infra.<env>.json` | Infra-owned app-settings (platform/security). Merged into Bicep. |
+| `deploy/config/appsettings.<app>.code.<env>.json`  | Code-owned app-settings (feature flags). Upserted by code pipeline; preserved across infra deploys via `build-extra-app-settings.ps1`. |
+| `deploy/scripts/apply-appsettings.ps1` | Reusable script called by code pipeline |
+| `deploy/scripts/build-extra-app-settings.ps1` | Reusable script called by infra pipeline |
+| `data/sql/AI.Regulatory.Sql/` | SQL project (DACPAC) — tables + post-deploy seed |
+
+---
+
+## SQL pipeline notes
+
+- **First publish must be run locally** by the AAD SQL admin (currently the
+  user `varshass@live.com`) so the CI service principal can be added as a
+  contained SQL user:
+
+  ```sql
+  CREATE USER [sp-ara-github-cd] FROM EXTERNAL PROVIDER;
+  ALTER ROLE db_owner ADD MEMBER [sp-ara-github-cd];
+  ```
+
+  After that, subsequent runs work headless via the pipeline.
+
+- **API MI grant** — the post-deploy script auto-creates a contained user for
+  the API app service system-assigned MI (name = `app-<project>-<env>-<region>-api`)
+  and grants `db_datareader` + `db_datawriter`. Requires MI to be enabled on
+  the API app service (see infra config).
+
+- **AAD-only server** — SQL server is provisioned with `azureADOnlyAuthentication=true`.
+  There is no SQL login; every connection must present an AAD token.

@@ -15,6 +15,10 @@ param imageTag string
 param deployerObjectId string
 param sqlAadAdminGroupObjectId string
 param sqlAadAdminGroupName string
+@allowed([ 'Group', 'User', 'Application' ])
+param sqlAadAdminPrincipalType string = 'Group'
+@description('Optional override — deploy SQL in a different region (e.g. dev SKU not available in the app region).')
+param sqlLocation string = ''
 
 @description('Map of feature -> array of extra appSettings entries ({name,value}). Fed by the pipeline from deploy/config/appsettings.<feature>.<env>.json.')
 param extraAppSettingsMap object = {}
@@ -152,11 +156,12 @@ module sql 'modules/sql.bicep' = if (wantSql) {
   name: 'mod-sql'
   params: {
     sqlServerName:            sqlName
-    location:                 location
+    location:                 empty(sqlLocation) ? location : sqlLocation
     tags:                     tags
     sqlSku:                   s.sqlSku
     aadAdminGroupObjectId:    sqlAadAdminGroupObjectId
     aadAdminGroupName:        sqlAadAdminGroupName
+    aadAdminPrincipalType:    sqlAadAdminPrincipalType
     logAnalyticsWorkspaceId:  monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
     enableDiagnostics:        wantLogAnalytics
   }

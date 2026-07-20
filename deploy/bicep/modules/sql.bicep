@@ -5,6 +5,8 @@ param tags object
 param sqlSku object
 param aadAdminGroupObjectId string = ''
 param aadAdminGroupName string = ''
+@allowed([ 'Group', 'User', 'Application' ])
+param aadAdminPrincipalType string = 'Group'
 param logAnalyticsWorkspaceId string = ''
 param enableDiagnostics bool = false
 param databaseName string = 'ara'
@@ -25,7 +27,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
       login: aadAdminGroupName
       sid: aadAdminGroupObjectId
       tenantId: subscription().tenantId
-      principalType: 'Group'
+      principalType: aadAdminPrincipalType
     }
   }
 }

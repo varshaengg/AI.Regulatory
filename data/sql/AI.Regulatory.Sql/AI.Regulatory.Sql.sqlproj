@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.Build.Sql/2.2.0">
+  <PropertyGroup>
+    <Name>AI.Regulatory.Sql</Name>
+    <ProjectGuid>{4b7c9a1e-4f2d-4d1e-8c8e-2a6f1b7d3c11}</ProjectGuid>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.SqlAzureV12DatabaseSchemaProvider</DSP>
+    <ModelCollation>1033, CI</ModelCollation>
+    <DefaultSchema>dbo</DefaultSchema>
+    <TargetDatabaseName>ara</TargetDatabaseName>
+    <TreatWarningsAsErrors>False</TreatWarningsAsErrors>
+    <SuppressTSqlWarnings>71502;71558;71501</SuppressTSqlWarnings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Folder Include="dbo\" />
+    <Folder Include="dbo\Tables\" />
+    <PostDeploy Include="Script.PostDeployment.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <SqlCmdVariable Include="ApiManagedIdentityName">
+      <DefaultValue></DefaultValue>
+      <Value>$(SqlCmdVar__ApiManagedIdentityName)</Value>
+    </SqlCmdVariable>
+  </ItemGroup>
+</Project>

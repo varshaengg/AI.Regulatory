@@ -75,6 +75,13 @@ param sqlAadAdminGroupObjectId string = ''
 @description('SQL admin AAD group display name')
 param sqlAadAdminGroupName string = ''
 
+@description('Type of AAD principal that owns SQL admin (Group | User | Application).')
+@allowed([ 'Group', 'User', 'Application' ])
+param sqlAadAdminPrincipalType string = 'Group'
+
+@description('Override region for SQL server (empty = use main location). Set when target SKU unavailable in main region.')
+param sqlLocation string = ''
+
 @description('Map of feature -> array of extra appSettings entries. Pipeline builds this from deploy/config/appsettings.<feature>.<env>.json.')
 param extraAppSettingsMap object = {}
 
@@ -165,6 +172,8 @@ module workload 'resources.bicep' = {
     deployerObjectId:           deployerObjectId
     sqlAadAdminGroupObjectId:   sqlAadAdminGroupObjectId
     sqlAadAdminGroupName:       sqlAadAdminGroupName
+    sqlAadAdminPrincipalType:   sqlAadAdminPrincipalType
+    sqlLocation:                sqlLocation
     extraAppSettingsMap:        extraAppSettingsMap
   }
 }

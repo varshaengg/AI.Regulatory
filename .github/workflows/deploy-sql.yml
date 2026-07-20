@@ -1,0 +1,110 @@
+name: ARA - SQL
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'data/sql/**'
+      - '.github/workflows/deploy-sql.yml'
+  workflow_dispatch:
+    inputs:
+      targetEnv:
+        description: 'Target environment'
+        type: choice
+        default: dev
+        options: [ dev, test, uat, prod ]
+      blockOnPossibleDataLoss:
+        description: 'Block on possible data loss'
+        type: boolean
+        default: true
+
+concurrency:
+  group: ara-sql-${{ github.event.inputs.targetEnv || 'dev' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TARGET_ENV: ${{ github.event.inputs.targetEnv || 'dev' }}
+  BLOCK_DATA_LOSS: ${{ github.event.inputs.blockOnPossibleDataLoss != 'false' }}
+  DATABASE_NAME: ara
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: Build DACPAC
+        run: |
+          set -e
+          mkdir -p dacpac
+          dotnet build data/sql/AI.Regulatory.Sql/AI.Regulatory.Sql.sqlproj \
+            --configuration Release --output dacpac
+          ls -la dacpac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dacpac
+          path: dacpac
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ara-${{ github.event.inputs.targetEnv || 'dev' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dacpac, path: dacpac }
+      - uses: azure/login@v2
+        with:
+          client-id:        ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:        ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id:  ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve SQL FQDN + API app from latest Bicep outputs
+        id: cfg
+        shell: pwsh
+        run: |
+          $env = "${{ env.TARGET_ENV }}"
+          $latest = az deployment sub list `
+            --query "sort_by([?starts_with(name, 'ara-$env-')], &properties.timestamp)[-1].name" -o tsv
+          if (-not $latest) { throw "No prior ara-$env-* deployment. Run infra pipeline first." }
+          $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value" -o tsv
+          $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+          $srv   = "sql-$np"
+          $fqdn  = az sql server show -g $rg -n $srv --query "fullyQualifiedDomainName" -o tsv
+          $apiApp = "app-$np-api"
+          "sqlFqdn=$fqdn" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "apiApp=$apiApp" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "sqlFqdn=$fqdn  apiApp=$apiApp"
+      - name: Install sqlpackage
+        run: |
+          dotnet tool install -g Microsoft.SqlPackage
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+      - name: sqlpackage publish
+        env:
+          SPN_CLIENT_ID:     ${{ secrets.AZURE_CLIENT_ID }}
+          SPN_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          set -e
+          DAC="dacpac/AI.Regulatory.Sql.dacpac"
+          if [ -z "$SPN_CLIENT_SECRET" ]; then
+            echo "ERROR: AZURE_CLIENT_SECRET secret is required for sqlpackage AAD ClientSecret auth."
+            echo "GH OIDC login gets a token, but sqlpackage needs a raw password. Add a client secret."
+            exit 1
+          fi
+          sqlpackage \
+            /Action:Publish \
+            /SourceFile:"$DAC" \
+            /TargetServerName:"${{ steps.cfg.outputs.sqlFqdn }}" \
+            /TargetDatabaseName:"$DATABASE_NAME" \
+            /TargetUser:"$SPN_CLIENT_ID" \
+            /TargetPassword:"$SPN_CLIENT_SECRET" \
+            /TargetEncryptConnection:True \
+            /ua:False \
+            /p:AzureAuthType=ClientSecret \
+            /Variables:ApiManagedIdentityName="${{ steps.cfg.outputs.apiApp }}" \
+            /p:BlockOnPossibleDataLoss=$BLOCK_DATA_LOSS \
+            /p:DropObjectsNotInSource=false \
+            /p:CreateNewDatabase=false

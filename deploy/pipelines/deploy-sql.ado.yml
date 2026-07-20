@@ -1,0 +1,151 @@
+# =============================================================================
+# ARA — SQL schema pipeline (Azure DevOps)
+# Builds the DACPAC from data/sql/AI.Regulatory.Sql then publishes to Azure SQL
+# using AAD service-principal auth. Post-deploy script seeds reference data
+# and (optionally) creates a contained user for the API managed identity.
+#
+# Trigger: any change under data/sql/** (or manual run).
+#
+# Pre-requisites (one-time, per environment):
+#   1. Infra pipeline has provisioned sql-<project>-<env>-<region> and the ara db.
+#   2. The service connection SP has been added as a contained SQL user with
+#      db_owner OR the SP is the AAD server admin (current dev setup uses the
+#      user 'varshass@live.com' as admin, so first publish must be run locally
+#      by that user — CI cannot bootstrap itself when the SP isn't a SQL user).
+#      To let CI take over long-term, run once locally:
+#          CREATE USER [sp-ara-github-cd] FROM EXTERNAL PROVIDER;
+#          ALTER ROLE db_owner ADD MEMBER [sp-ara-github-cd];
+# =============================================================================
+name: ARA-Sql-$(Date:yyyyMMdd)$(Rev:.rr)
+
+trigger:
+  branches:
+    include: [ main ]
+  paths:
+    include:
+      - data/sql/**
+      - deploy/pipelines/deploy-sql.ado.yml
+
+parameters:
+  - name: targetEnv
+    displayName: 'Target environment'
+    type: string
+    default: 'dev'
+    values: [ dev, test, uat, prod ]
+  - name: blockOnPossibleDataLoss
+    displayName: 'Block on possible data loss (recommended prod=true)'
+    type: boolean
+    default: true
+
+variables:
+  - group: ara-deploy
+  - name: sqlProj
+    value: '$(Build.SourcesDirectory)/data/sql/AI.Regulatory.Sql/AI.Regulatory.Sql.sqlproj'
+  - name: dacpacOut
+    value: '$(Build.ArtifactStagingDirectory)/sql'
+  - name: databaseName
+    value: 'ara'
+
+stages:
+# ---------------------------------------------------------------------------
+# 1. Build DACPAC
+# ---------------------------------------------------------------------------
+- stage: Build
+  jobs:
+    - job: BuildDacpac
+      pool: { vmImage: 'ubuntu-latest' }
+      steps:
+        - checkout: self
+        - task: UseDotNet@2
+          inputs: { packageType: sdk, version: '8.0.x' }
+        - script: |
+            set -e
+            mkdir -p "$(dacpacOut)"
+            dotnet build "$(sqlProj)" \
+              --configuration Release \
+              --output "$(dacpacOut)"
+            ls -la "$(dacpacOut)"
+          displayName: 'dotnet build (produces AI.Regulatory.Sql.dacpac)'
+        - publish: $(dacpacOut)
+          artifact: dacpac
+
+# ---------------------------------------------------------------------------
+# 2. Publish to Azure SQL (approval gated on ADO Environment)
+# ---------------------------------------------------------------------------
+- stage: Publish
+  dependsOn: Build
+  jobs:
+    - deployment: PublishDacpac
+      environment: 'ara-${{ parameters.targetEnv }}'
+      pool: { vmImage: 'ubuntu-latest' }
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: dacpac
+              - task: AzureCLI@2
+                displayName: 'Resolve SQL server FQDN + API app name from Bicep outputs'
+                name: cfg
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    $latest = az deployment sub list `
+                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" `
+                      -o tsv 2>$null
+                    if (-not $latest) { throw "No prior ara-${{ parameters.targetEnv }}-* deployment. Run infra pipeline first." }
+
+                    $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value" -o tsv
+                    $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+                    $srv   = "sql-$np"
+                    $fqdn  = az sql server show -g $rg -n $srv --query "fullyQualifiedDomainName" -o tsv
+                    $apiApp = "app-$np-api"
+
+                    Write-Host "namePrefix = $np"
+                    Write-Host "resourceGroup = $rg"
+                    Write-Host "sqlServer = $srv ($fqdn)"
+                    Write-Host "apiApp = $apiApp"
+
+                    Write-Host "##vso[task.setvariable variable=sqlFqdn;isOutput=true]$fqdn"
+                    Write-Host "##vso[task.setvariable variable=apiApp;isOutput=true]$apiApp"
+              - task: AzureCLI@2
+                displayName: 'Install sqlpackage'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    set -e
+                    dotnet tool install -g Microsoft.SqlPackage
+                    echo "##vso[task.prependpath]$HOME/.dotnet/tools"
+              - task: AzureCLI@2
+                displayName: 'sqlpackage /Action:Publish'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  addSpnToEnvironment: true
+                  inlineScript: |
+                    set -e
+                    DAC="$(Pipeline.Workspace)/dacpac/AI.Regulatory.Sql.dacpac"
+                    ls -la "$(Pipeline.Workspace)/dacpac"
+
+                    # Use the service connection SP for AAD auth (addSpnToEnvironment=true
+                    # exposes servicePrincipalId + servicePrincipalKey + tenantId).
+                    # This works when the SP has been added as a contained SQL user.
+                    sqlpackage \
+                      /Action:Publish \
+                      /SourceFile:"$DAC" \
+                      /TargetServerName:"$(cfg.sqlFqdn)" \
+                      /TargetDatabaseName:"$(databaseName)" \
+                      /TargetUser:"$servicePrincipalId" \
+                      /TargetPassword:"$servicePrincipalKey" \
+                      /TargetEncryptConnection:True \
+                      /ua:False \
+                      /p:AzureAuthType=ClientSecret \
+                      /Variables:ApiManagedIdentityName="$(cfg.apiApp)" \
+                      /p:BlockOnPossibleDataLoss=${{ parameters.blockOnPossibleDataLoss }} \
+                      /p:DropObjectsNotInSource=false \
+                      /p:CreateNewDatabase=false

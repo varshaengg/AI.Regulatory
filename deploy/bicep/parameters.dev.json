@@ -14,14 +14,17 @@
         { "kind": "storage" },
         { "kind": "appServicePlan" },
         { "kind": "appService", "feature": "web" },
-        { "kind": "appService", "feature": "api" }
+        { "kind": "appService", "feature": "api" },
+        { "kind": "sqlServer" }
       ]
     },
 
     "publisherAcrLoginServer":  { "value": "" },
     "imageTag":                 { "value": "" },
     "deployerObjectId":         { "value": "" },
-    "sqlAadAdminGroupObjectId": { "value": "" },
-    "sqlAadAdminGroupName":     { "value": "" }
+    "sqlLocation":              { "value": "centralus" },
+    "sqlAadAdminGroupObjectId": { "value": "18c43e1d-6f31-4e37-832f-a7c2b0bb5577" },
+    "sqlAadAdminGroupName":     { "value": "varshass_live.com#EXT#@varshasslive.onmicrosoft.com" },
+    "sqlAadAdminPrincipalType": { "value": "User" }
   }
 }
