@@ -132,19 +132,18 @@ stages:
                     DAC="$(Pipeline.Workspace)/dacpac/AI.Regulatory.Sql.dacpac"
                     ls -la "$(Pipeline.Workspace)/dacpac"
 
-                    # Use the service connection SP for AAD auth (addSpnToEnvironment=true
-                    # exposes servicePrincipalId + servicePrincipalKey + tenantId).
-                    # This works when the SP has been added as a contained SQL user.
+                    # AAD Service Principal auth via connection string.
+                    # addSpnToEnvironment=true exposes servicePrincipalId +
+                    # servicePrincipalKey. sqlpackage no longer supports
+                    # /p:AzureAuthType — use the connection string form.
+                    # The SP must be a contained SQL user first (see README
+                    # bootstrap step) or authentication will fail with Login failed.
+                    CONN="Server=tcp:$(cfg.sqlFqdn),1433;Initial Catalog=$(databaseName);Authentication=Active Directory Service Principal;User Id=$servicePrincipalId;Password=$servicePrincipalKey;Encrypt=True;TrustServerCertificate=False;Connection Timeout=60;"
+
                     sqlpackage \
                       /Action:Publish \
                       /SourceFile:"$DAC" \
-                      /TargetServerName:"$(cfg.sqlFqdn)" \
-                      /TargetDatabaseName:"$(databaseName)" \
-                      /TargetUser:"$servicePrincipalId" \
-                      /TargetPassword:"$servicePrincipalKey" \
-                      /TargetEncryptConnection:True \
-                      /ua:False \
-                      /p:AzureAuthType=ClientSecret \
+                      /TargetConnectionString:"$CONN" \
                       /Variables:ApiManagedIdentityName="$(cfg.apiApp)" \
                       /p:BlockOnPossibleDataLoss=${{ parameters.blockOnPossibleDataLoss }} \
                       /p:DropObjectsNotInSource=false \

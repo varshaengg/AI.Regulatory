@@ -90,20 +90,15 @@ jobs:
           set -e
           DAC="dacpac/AI.Regulatory.Sql.dacpac"
           if [ -z "$SPN_CLIENT_SECRET" ]; then
-            echo "ERROR: AZURE_CLIENT_SECRET secret is required for sqlpackage AAD ClientSecret auth."
+            echo "ERROR: AZURE_CLIENT_SECRET secret is required for sqlpackage AAD auth."
             echo "GH OIDC login gets a token, but sqlpackage needs a raw password. Add a client secret."
             exit 1
           fi
+          CONN="Server=tcp:${{ steps.cfg.outputs.sqlFqdn }},1433;Initial Catalog=$DATABASE_NAME;Authentication=Active Directory Service Principal;User Id=$SPN_CLIENT_ID;Password=$SPN_CLIENT_SECRET;Encrypt=True;TrustServerCertificate=False;Connection Timeout=60;"
           sqlpackage \
             /Action:Publish \
             /SourceFile:"$DAC" \
-            /TargetServerName:"${{ steps.cfg.outputs.sqlFqdn }}" \
-            /TargetDatabaseName:"$DATABASE_NAME" \
-            /TargetUser:"$SPN_CLIENT_ID" \
-            /TargetPassword:"$SPN_CLIENT_SECRET" \
-            /TargetEncryptConnection:True \
-            /ua:False \
-            /p:AzureAuthType=ClientSecret \
+            /TargetConnectionString:"$CONN" \
             /Variables:ApiManagedIdentityName="${{ steps.cfg.outputs.apiApp }}" \
             /p:BlockOnPossibleDataLoss=$BLOCK_DATA_LOSS \
             /p:DropObjectsNotInSource=false \
