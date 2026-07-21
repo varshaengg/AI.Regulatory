@@ -241,7 +241,8 @@ module appServices 'modules/appservice.bicep' = [for (svc, i) in appServiceEntri
     appInsightsConnString: monitoring.?outputs.appInsightsConnectionString ?? ''
     extraAppSettings:      contains(extraAppSettingsMap, svc.feature) ? extraAppSettingsMap[svc.feature] : []
     enableStagingSlot:     !startsWith(s.appServiceSku, 'B')
-    userAssignedIdentityId: workloadIdentity.?outputs.resourceId ?? ''
+    userAssignedIdentityId:       workloadIdentity.?outputs.resourceId ?? ''
+    userAssignedIdentityClientId: workloadIdentity.?outputs.clientId   ?? ''
   }
 }]
 

@@ -43,11 +43,17 @@ param enableStagingSlot bool = true
 @description('Resource id of a user-assigned managed identity to attach to the app (and its slot). Empty = system-assigned only.')
 param userAssignedIdentityId string = ''
 
+@description('Client (application) id of the user-assigned managed identity above. When set, the app gets AZURE_CLIENT_ID so DefaultAzureCredential picks the UAMI in dual-identity mode.')
+param userAssignedIdentityClientId string = ''
+
 var hasUami          = !empty(userAssignedIdentityId)
 var identityBlock    = hasUami
   ? { type: 'SystemAssigned, UserAssigned', userAssignedIdentities: { '${userAssignedIdentityId}': {} } }
   : { type: 'SystemAssigned' }
 var kvRefIdentity    = hasUami ? userAssignedIdentityId : 'SystemAssigned'
+var uamiClientIdSettings = (hasUami && !empty(userAssignedIdentityClientId)) ? [
+  { name: 'AZURE_CLIENT_ID', value: userAssignedIdentityClientId }
+] : []
 
 var isWeb        = feature == 'web'
 var isContainer  = !empty(containerImage)
@@ -78,7 +84,7 @@ var webOnlySettings = !isWeb ? [] : [
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
 ]
 
-var appSettings = concat(baseAppSettings, telemetrySettings, apiOnlySettings, webOnlySettings, extraAppSettings)
+var appSettings = concat(baseAppSettings, telemetrySettings, uamiClientIdSettings, apiOnlySettings, webOnlySettings, extraAppSettings)
 
 resource site 'Microsoft.Web/sites@2024-04-01' = {
   name: appServiceName
