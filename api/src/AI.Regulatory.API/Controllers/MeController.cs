@@ -29,12 +29,21 @@ public sealed class MeController : ControllerBase
     [ProducesResponseType(typeof(UserProfile), StatusCodes.Status200OK)]
     public ActionResult<UserProfile> Get()
     {
-        var id = User.FindFirstValue("oid") ?? string.Empty;
+        var id = ResolveOid(User) ?? string.Empty;
         var email = User.FindFirstValue("preferred_username") ?? string.Empty;
         var name = User.FindFirstValue("name") ?? email;
         var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
         return Ok(new UserProfile(id, name, email, roles, AvatarUrl: null));
     }
+
+    // Microsoft.Identity.Web maps the short "oid" claim to the long-form URI
+    // "http://schemas.microsoft.com/identity/claims/objectidentifier" via
+    // JwtBearer's default inbound claim mapping. Read both forms so we work
+    // regardless of the mapping setting.
+    private static string? ResolveOid(ClaimsPrincipal user) =>
+        user.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+        ?? user.FindFirstValue("oid")
+        ?? user.FindFirstValue(ClaimTypes.NameIdentifier);
 
     /// <summary>
     /// Effective permissions for the caller — feeds the SPA's <c>usePermissions</c>
@@ -53,7 +62,7 @@ public sealed class MeController : ControllerBase
     [ProducesResponseType(typeof(MePermissions), StatusCodes.Status200OK)]
     public async Task<ActionResult<MePermissions>> Permissions(CancellationToken ct)
     {
-        var oid = User.FindFirstValue("oid");
+        var oid = ResolveOid(User);
         IReadOnlyList<string> personas = Array.Empty<string>();
 
         if (!string.IsNullOrWhiteSpace(oid))
