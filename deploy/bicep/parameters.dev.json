@@ -12,6 +12,7 @@
         { "kind": "logAnalytics" },
         { "kind": "appInsights" },
         { "kind": "storage" },
+        { "kind": "managedIdentity" },
         { "kind": "appServicePlan" },
         { "kind": "appService", "feature": "web" },
         { "kind": "appService", "feature": "api" },

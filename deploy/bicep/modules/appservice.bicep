@@ -40,6 +40,15 @@ param extraAppSettings array = []
 @description('If true, creates a staging deployment slot (requires Standard+ SKU).')
 param enableStagingSlot bool = true
 
+@description('Resource id of a user-assigned managed identity to attach to the app (and its slot). Empty = system-assigned only.')
+param userAssignedIdentityId string = ''
+
+var hasUami          = !empty(userAssignedIdentityId)
+var identityBlock    = hasUami
+  ? { type: 'SystemAssigned, UserAssigned', userAssignedIdentities: { '${userAssignedIdentityId}': {} } }
+  : { type: 'SystemAssigned' }
+var kvRefIdentity    = hasUami ? userAssignedIdentityId : 'SystemAssigned'
+
 var isWeb        = feature == 'web'
 var isContainer  = !empty(containerImage)
 var linuxFxValue = isContainer
@@ -76,12 +85,12 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
   location: location
   tags: tags
   kind: isContainer ? 'app,linux,container' : 'app,linux'
-  identity: { type: 'SystemAssigned' }
+  identity: identityBlock
   properties: {
     serverFarmId: planId
     httpsOnly: true
     clientAffinityEnabled: false
-    keyVaultReferenceIdentity: 'SystemAssigned'
+    keyVaultReferenceIdentity: kvRefIdentity
     siteConfig: {
       linuxFxVersion: linuxFxValue
       appCommandLine: isContainer ? '' : (isWeb ? stackStartupCommand : '')
@@ -102,11 +111,11 @@ resource staging 'Microsoft.Web/sites/slots@2024-04-01' = if (!isWeb && enableSt
   location: location
   tags: tags
   kind: isContainer ? 'app,linux,container' : 'app,linux'
-  identity: { type: 'SystemAssigned' }
+  identity: identityBlock
   properties: {
     serverFarmId: planId
     httpsOnly: true
-    keyVaultReferenceIdentity: 'SystemAssigned'
+    keyVaultReferenceIdentity: kvRefIdentity
     siteConfig: {
       linuxFxVersion: linuxFxValue
       appCommandLine: isContainer ? '' : ''

@@ -68,6 +68,7 @@ var s = sizing[sizingTier]
 var kindShort = {
   appService:        'app'
   appServicePlan:    'plan'
+  managedIdentity:   'id'
   sqlServer:         'sql'
   sqlDatabase:       'sqldb'
   storage:           'st'
@@ -97,6 +98,7 @@ var wantSql           = hasKind(resources, 'sqlServer')
 var wantSearch        = hasKind(resources, 'search')
 var wantOpenAi        = hasKind(resources, 'openAi')
 var wantAppPlan       = hasKind(resources, 'appServicePlan') || length(appServiceEntries) > 0
+var wantWorkloadIdentity = hasKind(resources, 'managedIdentity')
 
 // -------------------------------------------------------------------------
 // Name helpers (single source of truth)
@@ -113,6 +115,7 @@ var sqlName    = name(kindShort, 'sqlServer',      namePrefix, '')
 var srchName   = name(kindShort, 'search',         namePrefix, '')
 var oaiName    = name(kindShort, 'openAi',         namePrefix, '')
 var planName   = name(kindShort, 'appServicePlan', namePrefix, '')
+var midName    = name(kindShort, 'managedIdentity', namePrefix, 'workload')
 
 // -------------------------------------------------------------------------
 // Modules — deployed conditionally based on `resources` catalog
@@ -128,15 +131,25 @@ module monitoring 'modules/monitoring.bicep' = if (wantLogAnalytics || wantAppIn
   }
 }
 
+module workloadIdentity 'modules/managed-identity.bicep' = if (wantWorkloadIdentity) {
+  name: 'mod-workload-identity'
+  params: {
+    identityName: midName
+    location:     location
+    tags:         tags
+  }
+}
+
 module keyvault 'modules/keyvault.bicep' = if (wantKeyVault) {
   name: 'mod-keyvault'
   params: {
-    keyVaultName:             kvName
-    location:                 location
-    tags:                     tags
-    deployerObjectId:         deployerObjectId
-    logAnalyticsWorkspaceId:  monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
-    enableDiagnostics:        wantLogAnalytics
+    keyVaultName:                 kvName
+    location:                     location
+    tags:                         tags
+    deployerObjectId:             deployerObjectId
+    workloadIdentityPrincipalId:  workloadIdentity.?outputs.principalId ?? ''
+    logAnalyticsWorkspaceId:      monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
+    enableDiagnostics:            wantLogAnalytics
   }
 }
 
@@ -228,6 +241,7 @@ module appServices 'modules/appservice.bicep' = [for (svc, i) in appServiceEntri
     appInsightsConnString: monitoring.?outputs.appInsightsConnectionString ?? ''
     extraAppSettings:      contains(extraAppSettingsMap, svc.feature) ? extraAppSettingsMap[svc.feature] : []
     enableStagingSlot:     !startsWith(s.appServiceSku, 'B')
+    userAssignedIdentityId: workloadIdentity.?outputs.resourceId ?? ''
   }
 }]
 
@@ -243,5 +257,9 @@ output apiAppName     string = apiIdx >= 0 ? appServices[apiIdx].outputs.appServ
 output webAppName     string = webIdx >= 0 ? appServices[webIdx].outputs.appServiceName  : ''
 output sqlServerFqdn  string = sql.?outputs.serverFqdn        ?? ''
 output keyVaultUri    string = keyvault.?outputs.keyVaultUri  ?? ''
+output workloadIdentityName        string = workloadIdentity.?outputs.name        ?? ''
+output workloadIdentityPrincipalId string = workloadIdentity.?outputs.principalId ?? ''
+output workloadIdentityClientId    string = workloadIdentity.?outputs.clientId    ?? ''
+output workloadIdentityResourceId  string = workloadIdentity.?outputs.resourceId  ?? ''
 output searchEndpoint string = search.?outputs.searchEndpoint ?? ''
 output openAiEndpoint string = openai.?outputs.openAiEndpoint ?? ''

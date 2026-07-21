@@ -3,6 +3,7 @@ param keyVaultName string
 param location string
 param tags object
 param deployerObjectId string = ''
+param workloadIdentityPrincipalId string = ''
 param logAnalyticsWorkspaceId string = ''
 param enableDiagnostics bool = false
 
@@ -36,6 +37,18 @@ resource kvAdminRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '00482a5a-887f-4fb3-b363-3b7fe8e74483') // Key Vault Administrator
     principalId: deployerObjectId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Grant the workload UAMI 'Key Vault Secrets User' so app services can resolve
+// @Microsoft.KeyVault(...) references via their user-assigned identity.
+resource kvWorkloadRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(workloadIdentityPrincipalId)) {
+  scope: kv
+  name: guid(kv.id, workloadIdentityPrincipalId, 'kv-secrets-user')
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
+    principalId: workloadIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
 }

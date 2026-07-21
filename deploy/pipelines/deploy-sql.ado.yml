@@ -101,18 +101,22 @@ stages:
                     $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
                     $srv   = "sql-$np"
                     $fqdn  = az sql server show -g $rg -n $srv --query "fullyQualifiedDomainName" -o tsv
-                    $apiApp = "app-$np-api"
-                    $apiMiOid = az webapp identity show -g $rg -n $apiApp --query "principalId" -o tsv
 
-                    Write-Host "namePrefix = $np"
-                    Write-Host "resourceGroup = $rg"
-                    Write-Host "sqlServer = $srv ($fqdn)"
-                    Write-Host "apiApp = $apiApp"
-                    Write-Host "apiMiOid = $apiMiOid"
+                    # Workload user-assigned managed identity (shared across apps).
+                    $midName = az deployment sub show --name $latest --query "properties.outputs.workloadIdentityName.value" -o tsv
+                    $midOid  = az deployment sub show --name $latest --query "properties.outputs.workloadIdentityPrincipalId.value" -o tsv
+                    if (-not $midName -or -not $midOid) {
+                      throw "workloadIdentity outputs missing. Add { kind: 'managedIdentity' } to parameters.<env>.json and re-run infra."
+                    }
+
+                    Write-Host "namePrefix       = $np"
+                    Write-Host "resourceGroup    = $rg"
+                    Write-Host "sqlServer        = $srv ($fqdn)"
+                    Write-Host "workloadIdentity = $midName ($midOid)"
 
                     Write-Host "##vso[task.setvariable variable=sqlFqdn;isOutput=true]$fqdn"
-                    Write-Host "##vso[task.setvariable variable=apiApp;isOutput=true]$apiApp"
-                    Write-Host "##vso[task.setvariable variable=apiMiOid;isOutput=true]$apiMiOid"
+                    Write-Host "##vso[task.setvariable variable=midName;isOutput=true]$midName"
+                    Write-Host "##vso[task.setvariable variable=midOid;isOutput=true]$midOid"
               - task: AzureCLI@2
                 displayName: 'Install sqlpackage'
                 inputs:
@@ -147,8 +151,8 @@ stages:
                       /Action:Publish \
                       /SourceFile:"$DAC" \
                       /TargetConnectionString:"$CONN" \
-                      /Variables:ApiManagedIdentityName="$(cfg.apiApp)" \
-                      /Variables:ApiManagedIdentityObjectId="$(cfg.apiMiOid)" \
+                      /Variables:ApiManagedIdentityName="$(cfg.midName)" \
+                      /Variables:ApiManagedIdentityObjectId="$(cfg.midOid)" \
                       /p:BlockOnPossibleDataLoss=${{ parameters.blockOnPossibleDataLoss }} \
                       /p:DropObjectsNotInSource=false \
                       /p:CreateNewDatabase=false

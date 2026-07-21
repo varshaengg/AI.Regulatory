@@ -187,3 +187,6 @@ output regionCode        string = regionCode
 output namePrefix        string = namePrefix
 output apiHostName       string = workload.outputs.apiHostName
 output webHostName       string = workload.outputs.webHostName
+output workloadIdentityName        string = workload.outputs.workloadIdentityName
+output workloadIdentityPrincipalId string = workload.outputs.workloadIdentityPrincipalId
+output workloadIdentityClientId    string = workload.outputs.workloadIdentityClientId
