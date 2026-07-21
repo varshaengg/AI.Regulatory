@@ -27,6 +27,14 @@ public abstract class BaseRepository<T> : IRepository<T>
     /// <summary>Whether this repository is running against seed data.</summary>
     protected bool IsMocked => _isMocked;
 
+    /// <summary>
+    /// Live seed list — mutable in mocked mode. Concrete repositories may
+    /// mutate this directly for operations the base <see cref="AddAsync"/>
+    /// contract doesn't cover (updates, upserts, deletes) — but only when
+    /// <see cref="IsMocked"/> is true.
+    /// </summary>
+    protected List<T> SeedList => _seed.Value;
+
     /// <summary>Seed values used when <c>IsMocked = true</c>.</summary>
     protected abstract IEnumerable<T> SeedData();
 

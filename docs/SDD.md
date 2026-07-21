@@ -461,6 +461,123 @@ sequenceDiagram
 
 **Acceptance mapping**: AC-001..AC-004 verified by Playwright end-to-end tests against a Microsoft 365 developer tenant using headed sign-in once, then `storageState` reuse for the rest of the suite.
 
+#### 4.1.1 Persona × Feature × Permission Model — Phase 1 (SQL-integrated)
+
+Ownership of *who can do what* now lives in the ARA database rather than being hard-coded in App Roles. This is the first data-integrated feature and the reference implementation of the "one grant, N app services" UAMI pattern described in §11.
+
+**Personas** (system defaults, seeded via `Script.PostDeployment.sql` MERGE):
+
+| Code       | Display          | Description                       |
+| :--------- | :--------------- | :-------------------------------- |
+| Admin      | Administrator    | Full system administration        |
+| RaLead     | RA Lead          | Regulatory affairs lead           |
+| RaAuthor   | RA Author        | Regulatory affairs author         |
+| RaReviewer | RA Reviewer      | Regulatory affairs reviewer       |
+
+**Permission verbs** (ordered least → greatest privilege): `Read < Write < Review < Admin`. The `Admin` verb implies all lower verbs at read-time; the stored matrix therefore stays sparse.
+
+**Feature catalog** (rows of the matrix; extend by INSERT):
+
+| Code               | Category       |
+| :----------------- | :------------- |
+| UserManagement     | Administration |
+| DossierManagement  | Regulatory     |
+| Templates          | Regulatory     |
+| Assignments        | Regulatory     |
+| Reviews            | Regulatory     |
+| Notifications      | Platform       |
+
+**SQL schema** (`data/sql/AI.Regulatory.Sql/`):
+
+```
+Persona            (Id PK, Code UNIQUE, Name, Description, IsSystem)
+Feature            (Id PK, Code UNIQUE, Name, Category, SortOrder)
+Permission        (Id PK, Code UNIQUE, Name, SortOrder)
+PersonaPermission (PersonaId FK, FeatureId FK, PermissionId FK)      -- the matrix
+AppUser           (Id PK, AadObjectId UNIQUE, DisplayName, Email, JobTitle, AddedAt, AddedBy)
+UserPersona       (AppUserId FK, PersonaId FK)                        -- many-to-many
+```
+
+The post-deploy script:
+1. MERGEs default Personas, Features, and Permissions.
+2. MERGEs the default PersonaPermission matrix (Admin ⇒ Admin on every feature; RA Reviewer includes `Review` on Reviews and DossierManagement).
+3. Idempotently adds the shared **UAMI** (`id-<project>-<env>-<region>-workload`) as a SQL contained user with `db_datareader` + `db_datawriter` — SID-form so no server AAD identity is required.
+
+**API surface** (all under `/api/v1/`, protected by `[Authorize]`):
+
+| Route                              | Verb | Purpose                                        | Consumer  |
+| :--------------------------------- | :--- | :--------------------------------------------- | :-------- |
+| `/personas`                        | GET  | Persona catalogue                              | A5, A6    |
+| `/permissions/verbs`               | GET  | Permission verbs (Read/Write/Review/Admin)     | A6        |
+| `/permissions/features`            | GET  | Feature catalogue                              | A6        |
+| `/permissions/matrix`              | GET  | Sparse persona × feature × verb grants         | A6        |
+| `/permissions/matrix`              | PUT  | Toggle one cell (`{persona,feature,verb,granted}`) | A6    |
+| `/users`                           | GET  | List enrolled AppUsers with their personas     | A5        |
+| `/users`                           | POST | Enrol a new user (from people-picker hit)      | A5        |
+| `/users/{id}/personas`             | PUT  | Replace persona list on an existing user       | A5        |
+| `/users/{id}`                      | DEL  | Remove user                                    | A5        |
+| `/aad/people?search=&top=`         | GET  | People-picker proxy — customer tenant only     | A5 dialog |
+| `/me/permissions`                  | GET  | Effective feature → verb grants for caller     | SPA gating |
+
+**Repository pattern**: every table above has a repository class that extends `BaseRepository<T>`, so the single `Data:IsMocked` flag flips the whole layer between seeded in-memory demo mode and live SQL. The seed values are exact mirrors of the SQL MERGE seed so mocked and live modes return identical data on a first read.
+
+**Screens** (in `src/screens/`):
+
+- **A5 · User Management** — user table with persona chips, filter by persona / free-text search, Add user (opens people-picker dialog), Edit personas (multi-select), Remove.
+- **A6 · Permission Matrix** — personas as rows, feature × verb as column groups, checkboxes are optimistically toggled and PUT one at a time. Cells implied by an `Admin` grant on the same (persona, feature) are shown checked but disabled.
+
+**People-picker (A5 add-user dialog)**:
+- Debounced 250 ms search against `GET /api/v1/aad/people?search=`.
+- In mocked mode: filtered substring match over a canned list of 10 seeded AAD people.
+- In live mode (planned): API impersonates via **on-behalf-of** or delegated Graph and issues `GET /v1.0/users?$search="displayName:{q}" OR "mail:{q}"` filtered by the customer tenant id — never a multi-tenant search.
+- The dialog never exposes AAD tokens to the browser; the SPA only sees `{ aadObjectId, displayName, email, jobTitle }`.
+
+**Effective-permissions resolution** (`GET /api/v1/me/permissions`):
+
+```
+caller (JWT)
+  └─ oid claim ─────> AppUsersRepository.Get(oid)
+                        └─ persona list
+                            └─ PermissionMatrixRepository.GetEffectivePermissions
+                                └─ { featureCode, permissions[] }   (Admin expanded)
+  └─ else fall back to role claims (dev/mock convenience)
+```
+
+**SPA gating**: `PermissionsProvider` wraps the shell and fires one `GET /me/permissions` on mount. The `usePermissions()` hook exposes `hasPermission(feature, verb)` and `hasAny(feature)`. `NavRail` reads it to hide left-nav groups + items the user cannot Read; individual screens use it to gate action buttons (e.g. A5 Add/Edit/Remove hidden when the caller has only `Read` on `UserManagement`). The API remains the authoritative gate — the client-side hook is a UX hint only.
+
+**Sequence — Add user flow (A5)**:
+
+```mermaid
+sequenceDiagram
+    actor A as Admin
+    participant SPA as A5 (SPA)
+    participant API as ARA API
+    participant SQL as SQL DB
+    participant Graph as MS Graph (live mode)
+
+    A->>SPA: Click "Add user"
+    A->>SPA: Type "chen" in picker
+    SPA->>API: GET /api/v1/aad/people?search=chen (debounced 250ms)
+    alt IsMocked=true (dev/demo)
+        API-->>SPA: filtered seed hits
+    else live mode
+        API->>Graph: GET /v1.0/users?$search=... (delegated / OBO)
+        Graph-->>API: hits (tenant-filtered)
+        API-->>SPA: mapped AadPerson[]
+    end
+    A->>SPA: Pick "Dr. Chen Liu", select persona "RaReviewer", Save
+    SPA->>API: POST /api/v1/users { aadObjectId, personaCodes:[RaReviewer] }
+    API->>SQL: MERGE AppUser + UserPersona (idempotent by AadObjectId)
+    SQL-->>API: rows
+    API-->>SPA: 201 Created + AppUser
+    SPA->>SPA: Refresh table
+    Note over SPA: Next login by Chen → /me/permissions returns Reviews:[Read,Write,Review]
+```
+
+**Auditability**: `AppUser.AddedBy` records the caller's `preferred_username`; each PUT on `/permissions/matrix` will be captured in an `AuditEvent` table (planned §6) so persona/permission changes flow to the same audit log as dossier signoffs.
+
+**Acceptance mapping**: AC-001..AC-004 (auth), AC-005 (people-picker returns only customer tenant), AC-006 (persona toggle reflected within 60 s on next `/me/permissions` refresh — SPA calls it once per shell mount).
+
 ### 4.2 Module 2 — Project Management
 
 **Requirements**: FR-004 (create), FR-005 (edit), FR-006 (archive).

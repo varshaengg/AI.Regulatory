@@ -37,6 +37,8 @@ export const screenConfig: Record<string, { title: string; persona: PersonaKey; 
   A2: { title: "CTD Template Catalog", persona: "Admin", intent: "Each module (M1–M5) has its own template — view, replace, archive, or upload per module." },
   A3: { title: "Upload Template", persona: "Admin", intent: "Upload a new template file for a specific CTD module." },
   A4: { title: "Project Sources", persona: "RALead", intent: "Map default source storage locations to each CTD module — project-specific settings owned by the RA Lead." },
+  A5: { title: "User Management", persona: "Admin", intent: "Manage tenant users and their persona assignments. People-picker sources are scoped to the customer AD tenant only (SDD §4.1)." },
+  A6: { title: "Permission Matrix", persona: "Admin", intent: "Configure per-persona feature permissions (Read / Write / Review / Admin). Drives left-nav visibility and in-screen action gating via /me/permissions." },
   L1: { title: "Home Dashboard", persona: "RALead", intent: "Command centre showing active run status, assignments, and notifications at a glance." },
   L2: { title: "Projects List", persona: "RALead", intent: "Filterable catalogue of all dossier projects with progress bars and status chips." },
   L3: { title: "New Dossier · Basics", persona: "RALead", intent: "Wizard step 1 captures product, country, submission type, and owner metadata." },
@@ -49,13 +51,23 @@ export const screenConfig: Record<string, { title: string; persona: PersonaKey; 
   R2: { title: "Sign-off", persona: "RAReviewer", intent: "Attestation and Entra ID authenticated signature to lock the dossier package." },
 };
 
-export const navGroups = [
-  { label: "Admin", items: [
+export const navGroups: {
+  label: string;
+  /**
+   * Feature code that gates every item in this group. Users lacking
+   * `Read` on this feature see the whole group hidden. `undefined` = always show.
+   */
+  featureCode?: string;
+  items: { id: string; label: string; star?: 1 | 2; featureCode?: string }[];
+}[] = [
+  { label: "Admin", featureCode: undefined, items: [
     { id: "A1", label: "Admin home" },
-    { id: "A2", label: "CTD templates" },
-    { id: "A3", label: "Upload template" },
+    { id: "A2", label: "CTD templates", featureCode: "Templates" },
+    { id: "A3", label: "Upload template", featureCode: "Templates" },
+    { id: "A5", label: "User management", featureCode: "UserManagement" },
+    { id: "A6", label: "Permission matrix", featureCode: "UserManagement" },
   ]},
-  { label: "RA Lead", items: [
+  { label: "RA Lead", featureCode: "DossierManagement", items: [
     { id: "L1", label: "Home dashboard" },
     { id: "L2", label: "Projects list" },
     { id: "A4", label: "Project sources" },
@@ -64,11 +76,11 @@ export const navGroups = [
     { id: "L5", label: "New dossier · Launch" },
     { id: "L6", label: "Run detail · Live" },
   ]},
-  { label: "RA Author", items: [
+  { label: "RA Author", featureCode: "Assignments", items: [
     { id: "U1", label: "Review assignments", star: 2 },
     { id: "U2", label: "Copilot focused" },
   ]},
-  { label: "RA Reviewer", items: [
+  { label: "RA Reviewer", featureCode: "Reviews", items: [
     { id: "R1", label: "Compiled package" },
     { id: "R2", label: "Sign-off" },
   ]},

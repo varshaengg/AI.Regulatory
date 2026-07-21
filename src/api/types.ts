@@ -213,3 +213,83 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+
+// ─── User & Access Management — A5, A6 ────────────────────────────────────
+// Mirrors AI.Regulatory.API/Contracts/Contracts.cs "User & Access Management".
+
+export interface Persona {
+  code: string;              // stable machine name (Admin, RaLead, ...)
+  name: string;
+  description?: string | null;
+  isSystem: boolean;
+}
+
+export interface Feature {
+  code: string;              // UserManagement, DossierManagement, ...
+  name: string;
+  category: string;
+  sortOrder: number;
+}
+
+/** Permission verbs (Read < Write < Review < Admin). Admin implies all. */
+export type PermissionCode = "Read" | "Write" | "Review" | "Admin";
+
+export interface Permission {
+  code: PermissionCode;
+  name: string;
+  sortOrder: number;
+}
+
+export interface PermissionMatrixEntry {
+  personaCode: string;
+  featureCode: string;
+  permissionCode: PermissionCode;
+  granted: boolean;
+}
+
+export interface UpdatePermissionRequest {
+  personaCode: string;
+  featureCode: string;
+  permissionCode: PermissionCode;
+  granted: boolean;
+}
+
+export interface AppUser {
+  id: string;
+  aadObjectId: string;
+  displayName: string;
+  email: string;
+  jobTitle?: string | null;
+  personaCodes: string[];
+  addedAt: string;           // ISO
+  addedBy: string;
+}
+
+export interface CreateAppUserRequest {
+  aadObjectId: string;
+  displayName: string;
+  email: string;
+  jobTitle?: string | null;
+  personaCodes: string[];
+}
+
+export interface AssignPersonasRequest {
+  personaCodes: string[];
+}
+
+export interface AadPerson {
+  aadObjectId: string;
+  displayName: string;
+  email: string;
+  jobTitle?: string | null;
+}
+
+export interface PermissionGrant {
+  featureCode: string;
+  permissions: PermissionCode[];
+}
+
+export interface MePermissions {
+  personas: string[];
+  grants: PermissionGrant[];
+}

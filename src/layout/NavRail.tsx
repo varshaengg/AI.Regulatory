@@ -3,7 +3,25 @@ import * as React from "react";
 import { Link } from "react-router";
 
 import { C, navGroups } from "../design/tokens";
+import { usePermissions } from "../api/usePermissions";
+
 export function NavRail({ activeScreen, style }: { activeScreen: string; style?: React.CSSProperties }) {
+  const { status, hasAny } = usePermissions();
+  // While permissions are loading we render the full nav (skeleton-y) so the
+  // page doesn't flash empty. On error we also fall open — the API itself
+  // still enforces access; the nav is only a UX hint.
+  const visibleGroups = React.useMemo(() => {
+    if (status !== "ready") return navGroups;
+    return navGroups
+      .map((g) => {
+        const items = g.items.filter((it) =>
+          it.featureCode ? hasAny(it.featureCode) : true);
+        return { ...g, items };
+      })
+      .filter((g) => g.items.length > 0
+                  && (!g.featureCode || hasAny(g.featureCode)));
+  }, [status, hasAny]);
+
   return (
     <div style={{
       width: 260, flexShrink: 0, display: "flex", flexDirection: "column",
@@ -15,7 +33,7 @@ export function NavRail({ activeScreen, style }: { activeScreen: string; style?:
         <div style={{ fontSize: "13px", fontWeight: 600, color: C.text1 }}>ARA · Wireframes</div>
         <div style={{ fontSize: "11px", color: C.text3 }}>Fluent 2 · React SPA + BFF · v1.5</div>
       </div>
-      {navGroups.map(group => (
+      {visibleGroups.map(group => (
         <div key={group.label} style={{ paddingTop: "12px", paddingBottom: "4px" }}>
           <div style={{
             padding: "0 16px 4px", fontSize: "11px", fontWeight: 700,

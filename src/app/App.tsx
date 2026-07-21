@@ -12,6 +12,7 @@ import { NavRail } from "../layout/NavRail";
 import { useIsMobile } from "../layout/useIsMobile";
 import { C, screenConfig } from "../design/tokens";
 import { RequireAuth } from "../auth/RequireAuth";
+import { PermissionsProvider } from "../api/usePermissions";
 
 // ─── Lazy-loaded screens ──────────────────────────────────────────────────────
 const screenLoaders: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
@@ -19,6 +20,8 @@ const screenLoaders: Record<string, React.LazyExoticComponent<React.ComponentTyp
   A2: lazy(() => import("../screens/A2")),
   A3: lazy(() => import("../screens/A3")),
   A4: lazy(() => import("../screens/A4")),
+  A5: lazy(() => import("../screens/A5")),
+  A6: lazy(() => import("../screens/A6")),
   L1: lazy(() => import("../screens/L1")),
   L2: lazy(() => import("../screens/L2")),
   L3: lazy(() => import("../screens/L3")),
@@ -132,7 +135,9 @@ const router = createBrowserRouter([
     path: "/",
     element: (
       <RequireAuth>
-        <Shell />
+        <PermissionsProvider>
+          <Shell />
+        </PermissionsProvider>
       </RequireAuth>
     ),
     children: [

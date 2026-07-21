@@ -34,6 +34,12 @@ builder.Services.AddSingleton<RunsRepository>();
 builder.Services.AddSingleton<NotificationsRepository>();
 builder.Services.AddSingleton<AdminRepository>();
 builder.Services.AddSingleton<DocTreeRepository>();
+builder.Services.AddSingleton<PersonasRepository>();
+builder.Services.AddSingleton<FeaturesRepository>();
+builder.Services.AddSingleton<PermissionsRepository>();
+builder.Services.AddSingleton<PermissionMatrixRepository>();
+builder.Services.AddSingleton<AppUsersRepository>();
+builder.Services.AddSingleton<AadPeopleRepository>();
 
 // Forwarded headers (App Service / reverse proxy sets X-Forwarded-Proto/For)
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
