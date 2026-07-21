@@ -15,11 +15,13 @@ public sealed class MeController : ControllerBase
 {
     private readonly AppUsersRepository _users;
     private readonly PermissionMatrixRepository _matrix;
+    private readonly IConfiguration _config;
 
-    public MeController(AppUsersRepository users, PermissionMatrixRepository matrix)
+    public MeController(AppUsersRepository users, PermissionMatrixRepository matrix, IConfiguration config)
     {
         _users = users;
         _matrix = matrix;
+        _config = config;
     }
 
     /// <summary>Full profile including roles.</summary>
@@ -40,8 +42,10 @@ public sealed class MeController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Persona resolution order:
-    /// 1. If the caller matches an <see cref="AppUser"/> by AAD objectId, use their assigned personas.
-    /// 2. Else fall back to <c>ClaimTypes.Role</c> values (dev/mock convenience).
+    /// 1. If the caller's <c>oid</c> is listed in <c>Admin:BootstrapOids</c>, treat as full Admin
+    ///    (bootstrap escape hatch — required before any AppUser can be enrolled through A5).
+    /// 2. If the caller matches an <see cref="AppUser"/> by AAD objectId, use their assigned personas.
+    /// 3. Else fall back to <c>ClaimTypes.Role</c> values (dev/mock convenience).
     /// If neither resolves, an empty grants list is returned and the SPA
     /// treats the caller as unauthorised for every feature.
     /// </remarks>
@@ -54,8 +58,16 @@ public sealed class MeController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(oid))
         {
-            var appUser = await _users.GetAsync(oid, ct);
-            if (appUser is not null) personas = appUser.PersonaCodes;
+            var bootstrap = _config.GetSection("Admin:BootstrapOids").Get<string[]>() ?? Array.Empty<string>();
+            if (bootstrap.Any(o => string.Equals(o, oid, StringComparison.OrdinalIgnoreCase)))
+            {
+                personas = new[] { "Admin" };
+            }
+            else
+            {
+                var appUser = await _users.GetAsync(oid, ct);
+                if (appUser is not null) personas = appUser.PersonaCodes;
+            }
         }
         if (personas.Count == 0)
             personas = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
