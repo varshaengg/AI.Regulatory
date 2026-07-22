@@ -62,7 +62,16 @@ if (entraConfigured)
 {
     builder.Services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddMicrosoftIdentityWebApi(entraSection);
+        .AddMicrosoftIdentityWebApi(entraSection)
+            // Enable On-Behalf-Of flow so the API can exchange the caller's user
+            // token for a Graph token (people picker in A5).
+            .EnableTokenAcquisitionToCallDownstreamApi()
+                .AddMicrosoftGraph(
+                    // Delegated People-Picker scope. User.ReadBasic.All returns
+                    // just displayName / mail / jobTitle / id which is exactly
+                    // what A5 needs — admin consent required once per tenant.
+                    defaultScopes: new[] { "User.ReadBasic.All" })
+                .AddInMemoryTokenCaches();
 }
 else
 {

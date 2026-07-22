@@ -321,11 +321,13 @@ function PeoplePicker({ value, onChange }: {
   const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
-    if (!query.trim() || value) { setResults([]); return; }
+    const q = query.trim();
+    // Match server-side minimum (3 chars) to avoid pointless Graph round-trips.
+    if (q.length < 3 || value) { setResults([]); return; }
     const ac = new AbortController();
     setLoading(true);
     const t = setTimeout(() => {
-      searchAadPeople(query, 10, ac.signal)
+      searchAadPeople(q, 10, ac.signal)
         .then((r) => { if (!ac.signal.aborted) { setResults(r); setOpen(true); } })
         .catch(() => {})
         .finally(() => { if (!ac.signal.aborted) setLoading(false); });
