@@ -19,6 +19,13 @@ builder.Services
         opts.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
+// ─── Application Insights telemetry (optional, enabled when connection string present) ──
+// Adds AI telemetry and forwards ILogger logs and exceptions to the configured resource.
+// Requires APPLICATIONINSIGHTS_CONNECTION_STRING app-setting in production.
+builder.Services.AddApplicationInsightsTelemetry();
+// Also enable logging provider so ILogger logs are sent to AI.
+builder.Logging.AddApplicationInsights();
+
 // ─── Data layer ───────────────────────────────────────────────────────────────
 // Every repository extends BaseRepository<T> and respects the single
 // Data:IsMocked flag defined below. Register concrete repositories as singletons
