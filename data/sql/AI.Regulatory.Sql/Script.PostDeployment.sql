@@ -124,6 +124,35 @@ WHEN NOT MATCHED BY TARGET THEN
     VALUES (src.PersonaId, src.FeatureId, src.PermissionId);
 
 -- ---------------------------------------------------------------------------
+-- AppUser seed: pre-configure admin users
+-- Idempotent: uses MERGE so re-runs don't duplicate
+-- ---------------------------------------------------------------------------
+MERGE [dbo].[AppUser] AS tgt
+USING (VALUES
+    -- (AadObjectId, DisplayName, Email, Upn, IsActive)
+    (CAST('1a403da5-4458-420a-adaf-6ff802800cd8' AS UNIQUEIDENTIFIER), N'Sopan', N'sopan@varshassive.onmicrosoft.com', N'sopan@varshassive.onmicrosoft.com', 1)
+) AS src (AadObjectId, DisplayName, Email, Upn, IsActive)
+    ON tgt.[AadObjectId] = src.[AadObjectId]
+WHEN MATCHED THEN
+    UPDATE SET [DisplayName] = src.[DisplayName], [Email] = src.[Email], [Upn] = src.[Upn], [IsActive] = src.[IsActive], [UpdatedUtc] = SYSUTCDATETIME()
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT ([AadObjectId], [DisplayName], [Email], [Upn], [IsActive], [CreatedUtc], [UpdatedUtc])
+    VALUES (src.[AadObjectId], src.[DisplayName], src.[Email], src.[Upn], src.[IsActive], SYSUTCDATETIME(), SYSUTCDATETIME());
+
+-- Assign Admin persona to Sopan
+INSERT INTO [dbo].[UserPersona] ([UserId], [PersonaId], [AssignedUtc], [AssignedBy])
+SELECT u.[Id], p.[Id], SYSUTCDATETIME(), N'system-seed'
+FROM [dbo].[AppUser] u, [dbo].[Persona] p
+WHERE u.[AadObjectId] = CAST('1a403da5-4458-420a-adaf-6ff802800cd8' AS UNIQUEIDENTIFIER)
+  AND p.[Code] = N'Admin'
+  AND NOT EXISTS (
+    SELECT 1 FROM [dbo].[UserPersona] up
+    WHERE up.[UserId] = u.[Id] AND up.[PersonaId] = p.[Id]
+  );
+
+PRINT 'Seeded AppUser: Sopan (1a403da5-4458-420a-adaf-6ff802800cd8) with Admin persona';
+
+-- ---------------------------------------------------------------------------
 -- Bootstrap: contained user for API managed identity (optional)
 --
 -- Requires BOTH sqlcmd vars to be set:
