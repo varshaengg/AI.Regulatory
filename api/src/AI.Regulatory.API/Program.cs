@@ -24,6 +24,7 @@ builder.Services
 // Data:IsMocked flag defined below. Register concrete repositories as singletons
 // so the in-memory seed persists for the lifetime of the process.
 builder.Services.Configure<DataOptions>(builder.Configuration.GetSection(DataOptions.SectionName));
+builder.Services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
 builder.Services.AddSingleton<ProjectsRepository>();
 builder.Services.AddSingleton<TemplatesRepository>();
 builder.Services.AddSingleton<ProjectSourcesRepository>();

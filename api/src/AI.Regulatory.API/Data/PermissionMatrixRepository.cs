@@ -1,4 +1,5 @@
 using AI.Regulatory.API.Contracts;
+using Dapper;
 using Microsoft.Extensions.Options;
 
 namespace AI.Regulatory.API.Data;
@@ -17,7 +18,10 @@ public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrix
 {
     private static readonly string[] AdminImplies = { "Read", "Write", "Review", "Admin" };
 
-    public PermissionMatrixRepository(IOptions<DataOptions> options) : base(options) { }
+    private readonly ISqlConnectionFactory _sql;
+
+    public PermissionMatrixRepository(IOptions<DataOptions> options, ISqlConnectionFactory sql)
+        : base(options) { _sql = sql; }
 
     protected override bool MatchesId(PermissionMatrixEntry item, string id) => false;
 
@@ -78,7 +82,40 @@ public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrix
             if (req.Granted) SeedList.Add(entry);
             return entry;
         }
-        return await AddToStoreAsync(entry, ct);
+
+        // Live path — lookup ids by code, then INSERT or DELETE the join row.
+        await using var c = await _sql.OpenAsync(ct);
+        const string LookupSql = @"
+            SELECT
+                (SELECT [Id] FROM [dbo].[Persona]    WHERE [Code] = @Persona)    AS PersonaId,
+                (SELECT [Id] FROM [dbo].[Feature]    WHERE [Code] = @Feature)    AS FeatureId,
+                (SELECT [Id] FROM [dbo].[Permission] WHERE [Code] = @Permission) AS PermissionId;";
+        var ids = await c.QuerySingleAsync<(int? PersonaId, int? FeatureId, int? PermissionId)>(
+            new CommandDefinition(LookupSql,
+                new { Persona = req.PersonaCode, Feature = req.FeatureCode, Permission = req.PermissionCode },
+                cancellationToken: ct));
+
+        if (ids.PersonaId is null || ids.FeatureId is null || ids.PermissionId is null)
+            throw new InvalidOperationException(
+                $"Unknown code(s): persona={req.PersonaCode}, feature={req.FeatureCode}, permission={req.PermissionCode}.");
+
+        if (req.Granted)
+        {
+            const string InsertSql = @"
+                IF NOT EXISTS (SELECT 1 FROM [dbo].[PersonaPermission]
+                               WHERE [PersonaId]=@PersonaId AND [FeatureId]=@FeatureId AND [PermissionId]=@PermissionId)
+                    INSERT INTO [dbo].[PersonaPermission] ([PersonaId],[FeatureId],[PermissionId])
+                    VALUES (@PersonaId,@FeatureId,@PermissionId);";
+            await c.ExecuteAsync(new CommandDefinition(InsertSql, ids, cancellationToken: ct));
+        }
+        else
+        {
+            const string DeleteSql = @"
+                DELETE FROM [dbo].[PersonaPermission]
+                WHERE [PersonaId]=@PersonaId AND [FeatureId]=@FeatureId AND [PermissionId]=@PermissionId;";
+            await c.ExecuteAsync(new CommandDefinition(DeleteSql, ids, cancellationToken: ct));
+        }
+        return entry;
     }
 
     /// <summary>
@@ -106,6 +143,20 @@ public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrix
             .Select(kv => new PermissionGrant(kv.Key, kv.Value.OrderBy(v => v).ToArray()))
             .OrderBy(g => g.FeatureCode)
             .ToArray();
+    }
+
+    protected override async Task<IReadOnlyList<PermissionMatrixEntry>> ListFromStoreAsync(CancellationToken ct)
+    {
+        await using var c = await _sql.OpenAsync(ct);
+        const string Sql = @"
+            SELECT p.[Code] AS PersonaCode, f.[Code] AS FeatureCode, pm.[Code] AS PermissionCode,
+                   CAST(1 AS BIT) AS Granted
+            FROM   [dbo].[PersonaPermission] pp
+            JOIN   [dbo].[Persona]    p  ON p.[Id]  = pp.[PersonaId]
+            JOIN   [dbo].[Feature]    f  ON f.[Id]  = pp.[FeatureId]
+            JOIN   [dbo].[Permission] pm ON pm.[Id] = pp.[PermissionId];";
+        var rows = await c.QueryAsync<PermissionMatrixEntry>(new CommandDefinition(Sql, cancellationToken: ct));
+        return rows.ToArray();
     }
 
     // Admin implies lower verbs — this expansion happens only at read time so

@@ -19,7 +19,13 @@ public abstract class BaseRepository<T> : IRepository<T>
 
     protected BaseRepository(IOptions<DataOptions> options)
     {
-        _isMocked = options.Value.IsMocked;
+        var opts = options.Value;
+        // A repo is mocked when the global default says so AND it isn't listed
+        // in Data:LiveRepositories (the per-repo override for phased rollout).
+        var thisName = GetType().Name;
+        var overriden = opts.LiveRepositories.Any(n =>
+            string.Equals(n, thisName, StringComparison.OrdinalIgnoreCase));
+        _isMocked = opts.IsMocked && !overriden;
         // Lazy so the subclass constructor completes before SeedData runs.
         _seed = new Lazy<List<T>>(() => new List<T>(SeedData()));
     }

@@ -2,7 +2,6 @@ using AI.Regulatory.API.Contracts;
 using AI.Regulatory.API.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using Microsoft.Graph;
 
 namespace AI.Regulatory.API.Controllers;
@@ -31,16 +30,13 @@ public sealed class AadPeopleController : ControllerBase
 {
     private readonly AadPeopleRepository _repo;
     private readonly GraphServiceClient? _graph;
-    private readonly bool _isMocked;
 
     public AadPeopleController(
         AadPeopleRepository repo,
-        IOptions<Data.DataOptions> dataOptions,
         GraphServiceClient? graph = null)
     {
         _repo = repo;
         _graph = graph;
-        _isMocked = dataOptions.Value.IsMocked;
     }
 
     /// <summary>Search by display name or email prefix. Returns up to <paramref name="top"/> hits (max 25).</summary>
@@ -52,8 +48,9 @@ public sealed class AadPeopleController : ControllerBase
         search = (search ?? string.Empty).Trim();
         if (search.Length < 3) return Ok(Array.Empty<AadPerson>());
 
-        // Mocked mode — return canned people.
-        if (_isMocked || _graph is null)
+        // Fall back to the in-memory seed only when there's no Graph client at
+        // all (no EntraId config — happens in local dev / smoke deploys).
+        if (_graph is null)
             return Ok(await _repo.Search(search, top, ct));
 
         // Live mode — call Graph via OBO. $search requires ConsistencyLevel:eventual.
