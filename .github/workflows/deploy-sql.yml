@@ -28,7 +28,7 @@ permissions:
 
 env:
   TARGET_ENV: ${{ github.event.inputs.targetEnv || 'dev' }}
-  BLOCK_DATA_LOSS: ${{ github.event.inputs.blockOnPossibleDataLoss != 'false' }}
+  BLOCK_DATA_LOSS: ${{ github.event.inputs.blockOnPossibleDataLoss == 'true' }}
   DATABASE_NAME: ara
 
 jobs:
