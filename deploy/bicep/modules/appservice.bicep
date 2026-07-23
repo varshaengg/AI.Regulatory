@@ -48,7 +48,7 @@ param userAssignedIdentityClientId string = ''
 
 var hasUami          = !empty(userAssignedIdentityId)
 var identityBlock    = hasUami
-  ? { type: 'SystemAssigned, UserAssigned', userAssignedIdentities: { '${userAssignedIdentityId}': {} } }
+  ? { type: 'UserAssigned', userAssignedIdentities: { '${userAssignedIdentityId}': {} } }
   : { type: 'SystemAssigned' }
 var kvRefIdentity    = hasUami ? userAssignedIdentityId : 'SystemAssigned'
 var uamiClientIdSettings = (hasUami && !empty(userAssignedIdentityClientId)) ? [
