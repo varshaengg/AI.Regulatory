@@ -107,3 +107,12 @@ jobs:
             /p:BlockOnPossibleDataLoss=$BLOCK_DATA_LOSS \
             /p:DropObjectsNotInSource=false \
             /p:CreateNewDatabase=false
+
+      - name: Grant SQL permissions to API managed identity (post-deploy verification)
+        shell: pwsh
+        run: |
+          ./deploy/scripts/grant-sql-permissions.ps1 `
+            -SqlServer "${{ steps.cfg.outputs.sqlFqdn }}" `
+            -Database "${{ env.DATABASE_NAME }}" `
+            -ManagedIdentityName "${{ steps.cfg.outputs.midName }}" `
+            -ManagedIdentityObjectId "${{ steps.cfg.outputs.midOid }}"
