@@ -94,10 +94,10 @@ public sealed class AadPeopleController : ControllerBase
                 {
                     var all = await _users.ListAsync(ct);
                     var matches = all
-                        .Where(x => (x.displayName ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
-                                 || (x.email ?? "").Contains(search, StringComparison.OrdinalIgnoreCase))
+                        .Where                        (x => (x.DisplayName ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
+                                                         || (x.Email ?? "").Contains(search, StringComparison.OrdinalIgnoreCase))
                         .Take(pageSize)
-                        .Select(u => new AadPerson(u.aadObjectId, u.displayName, u.email, u.jobTitle ?? string.Empty))
+                        .Select(u => new AadPerson(u.AadObjectId, u.DisplayName, u.Email, u.JobTitle ?? string.Empty))
                         .ToArray();
                     if (matches.Any()) return Ok(matches);
                 }
@@ -152,14 +152,14 @@ public sealed class AadPeopleController : ControllerBase
         if (_users is not null)
         {
             var all = await _users.ListAsync(ct);
-            var match = all.FirstOrDefault(x => string.Equals(x.email, q, StringComparison.OrdinalIgnoreCase));
+            var match = all.FirstOrDefault(x => string.Equals(x.Email, q, StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
                 return Ok(new AadPerson(
-                    AadObjectId: match.aadObjectId,
-                    DisplayName: match.displayName,
-                    Email:       match.email,
-                    JobTitle:    match.jobTitle ?? string.Empty));
+                                AadObjectId: match.AadObjectId,
+                                DisplayName: match.DisplayName,
+                                Email:       match.Email,
+                                JobTitle:    match.JobTitle ?? string.Empty));
             }
         }
 
