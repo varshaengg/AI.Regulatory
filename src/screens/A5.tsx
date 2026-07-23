@@ -5,7 +5,7 @@ import { UserPlus, Search, X, Trash2, Users } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, ScreenCaption } from "../design/primitives";
 import {
-  listUsers, listPersonas, createUser, assignUserPersonas, deleteUser, searchAadPeople,
+  listUsers, listPersonas, createUser, assignUserPersonas, deleteUser, searchAadPeople, resolveAadPersonByEmail,
 } from "../api/resources";
 import type { AppUser, Persona, AadPerson } from "../api/types";
 import { useApi, ErrorBanner } from "../api/useApi";
@@ -324,6 +324,20 @@ function PeoplePicker({ value, onChange }: {
     const q = query.trim();
     // Match server-side minimum (3 chars) to avoid pointless Graph round-trips.
     if (q.length < 3 || value) { setResults([]); return; }
+
+    // If user typed an email-like string, try resolve-by-email first so the
+    // picker accepts typed emails without requiring Enter. This falls back to
+    // DB when Graph/seed miss and improves UX for copy-paste emails.
+    if (q.includes("@")) {
+      const acEmail = new AbortController();
+      setLoading(true);
+      resolveAadPersonByEmail(q, acEmail.signal)
+        .then((r) => { if (!acEmail.signal.aborted && r) { onChange(r); setQuery(""); } })
+        .catch(() => {})
+        .finally(() => { if (!acEmail.signal.aborted) setLoading(false); acEmail.abort(); });
+      return () => { acEmail.abort(); };
+    }
+
     const ac = new AbortController();
     setLoading(true);
     const t = setTimeout(() => {
@@ -333,7 +347,7 @@ function PeoplePicker({ value, onChange }: {
         .finally(() => { if (!ac.signal.aborted) setLoading(false); });
     }, 250);
     return () => { clearTimeout(t); ac.abort(); };
-  }, [query, value]);
+  }, [query, value, onChange]);
 
   if (value) {
     return (
@@ -366,6 +380,18 @@ function PeoplePicker({ value, onChange }: {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
+        onKeyDown={async (e) => {
+          if (e.key === "Enter" && query.trim().length >= 3 && results.length === 0) {
+            // Try server-side resolve by exact email (falls back to DB if Graph/seed miss)
+            try {
+              setLoading(true);
+              const res = await resolveAadPersonByEmail(query.trim());
+              if (res) { onChange(res); setQuery(""); setOpen(false); }
+            } catch (err) {
+              // Not found or error — ignore silently and keep the dropdown closed
+            } finally { setLoading(false); }
+          }
+        }}
         placeholder="Search customer directory (name or email)…"
         style={{
           width: "100%", padding: "8px 12px", fontSize: 13,

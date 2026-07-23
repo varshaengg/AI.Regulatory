@@ -30,12 +30,15 @@ public sealed class AadPeopleController : ControllerBase
 {
     private readonly AadPeopleRepository _repo;
     private readonly GraphServiceClient? _graph;
+    private readonly AppUsersRepository? _users;
 
     public AadPeopleController(
         AadPeopleRepository repo,
+        AppUsersRepository? users = null,
         GraphServiceClient? graph = null)
     {
         _repo = repo;
+        _users = users;
         _graph = graph;
     }
 
@@ -58,22 +61,108 @@ public sealed class AadPeopleController : ControllerBase
         var quoted = search.Replace("\"", string.Empty);
         var searchExpr = $"\"displayName:{quoted}\" OR \"mail:{quoted}\"";
 
-        var users = await _graph.Users.GetAsync(cfg =>
+        try
         {
-            cfg.QueryParameters.Search = searchExpr;
-            cfg.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle" };
-            cfg.QueryParameters.Top    = pageSize;
-            cfg.Headers.Add("ConsistencyLevel", "eventual");
-        }, ct);
+            var users = await _graph.Users.GetAsync(cfg =>
+            {
+                cfg.QueryParameters.Search = searchExpr;
+                cfg.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle" };
+                cfg.QueryParameters.Top    = pageSize;
+                cfg.Headers.Add("ConsistencyLevel", "eventual");
+            }, ct);
 
-        var results = (users?.Value ?? new List<Microsoft.Graph.Models.User>())
-            .Select(u => new AadPerson(
-                AadObjectId: u.Id ?? string.Empty,
-                DisplayName: u.DisplayName ?? "(no name)",
-                Email:       u.Mail ?? u.UserPrincipalName ?? string.Empty,
-                JobTitle:    u.JobTitle ?? string.Empty))
-            .ToArray();
+            var results = (users?.Value ?? new List<Microsoft.Graph.Models.User>())
+                .Select(u => new AadPerson(
+                    AadObjectId: u.Id ?? string.Empty,
+                    DisplayName: u.DisplayName ?? "(no name)",
+                    Email:       u.Mail ?? u.UserPrincipalName ?? string.Empty,
+                    JobTitle:    u.JobTitle ?? string.Empty))
+                .ToArray();
 
-        return Ok(results);
+            return Ok(results);
+        }
+        catch (Exception ex)
+        {
+            // Fall back to seed repo when Graph call fails (e.g., OBO failure).
+            // Also attempt to resolve from already-enrolled AppUser rows if available.
+            try
+            {
+                var seed = await _repo.Search(search, top, ct);
+                if (seed.Any()) return Ok(seed);
+
+                if (_users is not null)
+                {
+                    var all = await _users.ListAsync(ct);
+                    var matches = all
+                        .Where(x => (x.displayName ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
+                                 || (x.email ?? "").Contains(search, StringComparison.OrdinalIgnoreCase))
+                        .Take(pageSize)
+                        .Select(u => new AadPerson(u.aadObjectId, u.displayName, u.email, u.jobTitle ?? string.Empty))
+                        .ToArray();
+                    if (matches.Any()) return Ok(matches);
+                }
+            }
+            catch { /* swallow secondary errors and continue to empty result */ }
+
+            return Ok(Array.Empty<AadPerson>());
+        }
+    }
+
+    /// <summary>
+    /// Try to resolve a single user by email (fallback path used when people-picker
+    /// input is an exact email and the regular $search returned no hits). This helps
+    /// the SPA accept typed emails and also enables "load from DB" fallback when
+    /// Graph isn't available.
+    /// </summary>
+    [HttpGet("people/resolve")]
+    [ProducesResponseType(typeof(AadPerson), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AadPerson>> Resolve([FromQuery] string email, CancellationToken ct = default)
+    {
+        var q = (email ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(q)) return BadRequest();
+
+        // Try Graph first (live mode)
+        if (_graph is not null)
+        {
+            var filter = $"mail eq '{q}' or userPrincipalName eq '{q}'";
+            var users = await _graph.Users.GetAsync(cfg =>
+            {
+                cfg.QueryParameters.Filter = filter;
+                cfg.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle" };
+                cfg.QueryParameters.Top = 1;
+            }, ct);
+
+            var u = users?.Value?.FirstOrDefault();
+            if (u is not null)
+            {
+                return Ok(new AadPerson(
+                    AadObjectId: u.Id ?? string.Empty,
+                    DisplayName: u.DisplayName ?? "(no name)",
+                    Email:       u.Mail ?? u.UserPrincipalName ?? string.Empty,
+                    JobTitle:    u.JobTitle ?? string.Empty));
+            }
+        }
+
+        // Fallback to seed repository (mocked mode)
+        var seedHits = await _repo.Search(q, 1, ct);
+        if (seedHits.Any()) return Ok(seedHits.First());
+
+        // Finally try existing AppUser rows in SQL (helps when user already enrolled)
+        if (_users is not null)
+        {
+            var all = await _users.ListAsync(ct);
+            var match = all.FirstOrDefault(x => string.Equals(x.email, q, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                return Ok(new AadPerson(
+                    AadObjectId: match.aadObjectId,
+                    DisplayName: match.displayName,
+                    Email:       match.email,
+                    JobTitle:    match.jobTitle ?? string.Empty));
+            }
+        }
+
+        return NotFound();
     }
 }

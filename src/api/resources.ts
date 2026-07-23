@@ -95,6 +95,10 @@ export const deleteUser = (userId: string, signal?: AbortSignal) =>
 export const searchAadPeople = (query: string, top = 10, signal?: AbortSignal) =>
   api.get<AadPerson[]>("/aad/people", { search: query, top }, signal);
 
+// Resolve a single person by email (fallback / DB lookup when needed)
+export const resolveAadPersonByEmail = (email: string, signal?: AbortSignal) =>
+  api.get<AadPerson>("/aad/people/resolve", { email }, signal);
+
 // Effective permissions for the caller (feeds usePermissions hook)
 export const getMyPermissions = (signal?: AbortSignal) =>
   api.get<MePermissions>("/me/permissions", undefined, signal);
