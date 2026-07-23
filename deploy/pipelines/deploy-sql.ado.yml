@@ -35,7 +35,7 @@ parameters:
   - name: blockOnPossibleDataLoss
     displayName: 'Block on possible data loss (recommended prod=true)'
     type: boolean
-    default: true
+    default: false
 
 variables:
   - group: ara-deploy

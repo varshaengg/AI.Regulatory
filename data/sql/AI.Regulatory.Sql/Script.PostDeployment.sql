@@ -180,10 +180,31 @@ BEGIN
         PRINT N'Created contained user ' + @miName + N' with SID=' + CONVERT(NVARCHAR(200), @miSid, 1);
     END
 
-    SET @sql = N'ALTER ROLE db_datareader ADD MEMBER ' + @miNameQ + N';';
-    EXEC sys.sp_executesql @sql;
-    SET @sql = N'ALTER ROLE db_datawriter ADD MEMBER ' + @miNameQ + N';';
-    EXEC sys.sp_executesql @sql;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM sys.database_role_members drm
+        JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+        JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+        WHERE r.[name] = N'db_datareader'
+          AND m.[name] = @miName
+    )
+    BEGIN
+        SET @sql = N'ALTER ROLE db_datareader ADD MEMBER ' + @miNameQ + N';';
+        EXEC sys.sp_executesql @sql;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM sys.database_role_members drm
+        JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+        JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+        WHERE r.[name] = N'db_datawriter'
+          AND m.[name] = @miName
+    )
+    BEGIN
+        SET @sql = N'ALTER ROLE db_datawriter ADD MEMBER ' + @miNameQ + N';';
+        EXEC sys.sp_executesql @sql;
+    END
 
     PRINT N'Granted db_datareader + db_datawriter to ' + @miName;
 END
