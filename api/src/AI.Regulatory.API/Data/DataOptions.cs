@@ -16,10 +16,7 @@ public sealed class DataOptions
     /// <summary>Global default: load seed data instead of hitting the persistent store.</summary>
     public bool IsMocked { get; init; } = true;
 
-    /// <summary>
-    /// Per-repository override — names in this list use the live store even when
-    /// <see cref="IsMocked"/> is true. Values are simple class names, e.g.
-    /// <c>"PersonasRepository"</c>, <c>"AppUsersRepository"</c>.
-    /// </summary>
-    public string[] LiveRepositories { get; init; } = Array.Empty<string>();
+    // NOTE: Per-repository LiveRepositories override removed — use Data:IsMocked
+    // to control mocked vs live behavior globally. During migration the code may
+    // still accept legacy configuration keys, but runtime uses the single flag.
 }

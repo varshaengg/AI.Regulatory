@@ -20,12 +20,10 @@ public abstract class BaseRepository<T> : IRepository<T>
     protected BaseRepository(IOptions<DataOptions> options)
     {
         var opts = options.Value;
-        // A repo is mocked when the global default says so AND it isn't listed
-        // in Data:LiveRepositories (the per-repo override for phased rollout).
-        var thisName = GetType().Name;
-        var overriden = opts.LiveRepositories.Any(n =>
-            string.Equals(n, thisName, StringComparison.OrdinalIgnoreCase));
-        _isMocked = opts.IsMocked && !overriden;
+        // Single-flag model: the global IsMocked controls mocked vs live behavior.
+        // During migration, repositories that have not implemented live store
+        // operations will gracefully fallback to seed data (see callers).
+        _isMocked = opts.IsMocked;
         // Lazy so the subclass constructor completes before SeedData runs.
         _seed = new Lazy<List<T>>(() => new List<T>(SeedData()));
     }
@@ -49,24 +47,56 @@ public abstract class BaseRepository<T> : IRepository<T>
 
     // ─── Public API ────────────────────────────────────────────────────────
 
-    public virtual Task<IReadOnlyList<T>> ListAsync(CancellationToken ct = default)
-        => _isMocked
-            ? Task.FromResult<IReadOnlyList<T>>(_seed.Value.AsReadOnly())
-            : ListFromStoreAsync(ct);
+    public virtual async Task<IReadOnlyList<T>> ListAsync(CancellationToken ct = default)
+    {
+        if (_isMocked)
+            return _seed.Value.AsReadOnly();
 
-    public virtual Task<T?> GetAsync(string id, CancellationToken ct = default)
-        => _isMocked
-            ? Task.FromResult(_seed.Value.FirstOrDefault(x => MatchesId(x, id)))
-            : GetFromStoreAsync(id, ct);
+        try
+        {
+            return await ListFromStoreAsync(ct).ConfigureAwait(false);
+        }
+        catch (NotImplementedException)
+        {
+            // Graceful fallback: repository has no live implementation yet —
+            // return seed data to avoid breaking the API during phased rollout.
+            return _seed.Value.AsReadOnly();
+        }
+    }
 
-    public virtual Task<T> AddAsync(T item, CancellationToken ct = default)
+    public virtual async Task<T?> GetAsync(string id, CancellationToken ct = default)
+    {
+        if (_isMocked)
+            return _seed.Value.FirstOrDefault(x => MatchesId(x, id));
+
+        try
+        {
+            return await GetFromStoreAsync(id, ct).ConfigureAwait(false);
+        }
+        catch (NotImplementedException)
+        {
+            return _seed.Value.FirstOrDefault(x => MatchesId(x, id));
+        }
+    }
+
+    public virtual async Task<T> AddAsync(T item, CancellationToken ct = default)
     {
         if (_isMocked)
         {
             _seed.Value.Add(item);
-            return Task.FromResult(item);
+            return item;
         }
-        return AddToStoreAsync(item, ct);
+
+        try
+        {
+            return await AddToStoreAsync(item, ct).ConfigureAwait(false);
+        }
+        catch (NotImplementedException)
+        {
+            // Fallback to in-memory seed when live store missing.
+            _seed.Value.Add(item);
+            return item;
+        }
     }
 
     // ─── Store hooks — override when live storage lands ───────────────────
