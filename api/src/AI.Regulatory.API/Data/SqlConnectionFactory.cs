@@ -5,9 +5,9 @@ using Microsoft.Data.SqlClient;
 namespace AI.Regulatory.API.Data;
 
 /// <summary>
-/// Opens a <see cref="SqlConnection"/> to Azure SQL and attaches an AAD access
-/// token from <see cref="DefaultAzureCredential"/>. The connection string must
-/// therefore contain <b>no</b> user/password — auth is entirely token-based.
+/// Opens a <see cref="SqlConnection"/> to Azure SQL. If the connection string
+/// specifies an Azure AD auth mode, SqlClient handles auth itself; otherwise we
+/// attach an AAD access token from <see cref="DefaultAzureCredential"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -51,8 +51,15 @@ public sealed class SqlConnectionFactory : ISqlConnectionFactory
 
     public async Task<SqlConnection> OpenAsync(CancellationToken ct = default)
     {
-        var token = await _credential.GetTokenAsync(new TokenRequestContext(SqlScopes), ct);
-        var conn = new SqlConnection(_connectionString) { AccessToken = token.Token };
+        var builder = new SqlConnectionStringBuilder(_connectionString);
+        var conn = new SqlConnection(_connectionString);
+
+        if (builder.Authentication == SqlAuthenticationMethod.NotSpecified)
+        {
+            var token = await _credential.GetTokenAsync(new TokenRequestContext(SqlScopes), ct);
+            conn.AccessToken = token.Token;
+        }
+
         try
         {
             await conn.OpenAsync(ct);
@@ -61,8 +68,7 @@ public sealed class SqlConnectionFactory : ISqlConnectionFactory
         catch
         {
             await conn.DisposeAsync();
-            _log.LogError("Failed to open SQL connection to {Server}",
-                new SqlConnectionStringBuilder(_connectionString).DataSource);
+            _log.LogError("Failed to open SQL connection to {Server}", builder.DataSource);
             throw;
         }
     }
