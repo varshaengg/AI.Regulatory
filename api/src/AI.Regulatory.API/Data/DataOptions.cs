@@ -13,8 +13,8 @@ public sealed class DataOptions
 {
     public const string SectionName = "Data";
 
-    /// <summary>Global default: load seed data instead of hitting the persistent store.</summary>
-    public bool IsMocked { get; init; } = true;
+    /// <summary>Global default: hit the persistent store instead of loading seed data.</summary>
+    public bool IsMocked { get; init; } = false;
 
     // NOTE: Per-repository LiveRepositories override removed — use Data:IsMocked
     // to control mocked vs live behavior globally. During migration the code may
