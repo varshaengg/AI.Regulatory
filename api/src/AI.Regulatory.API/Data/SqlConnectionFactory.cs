@@ -8,14 +8,10 @@ namespace AI.Regulatory.API.Data;
 /// </summary>
 /// <remarks>
 /// <para>
-/// In App Service the token comes from the workload's User-Assigned Managed
-/// Identity — pinned via the <c>AZURE_CLIENT_ID</c> environment variable
-/// (wired by the Bicep template alongside <c>userAssignedIdentityResourceId</c>).
-/// </para>
-/// <para>
-/// Tokens are cached inside <see cref="DefaultAzureCredential"/>; a new one is
-/// fetched only when the previous expires. Connection pooling is handled by
-/// SqlClient — we return a fresh <see cref="SqlConnection"/> per call.
+/// For user-assigned managed identity, the UAMI client ID must be supplied via
+/// <c>Sql:ManagedIdentityClientId</c> so SqlClient can select the correct
+/// identity. Connection pooling is handled by SqlClient — we return a fresh
+/// <see cref="SqlConnection"/> per call.
 /// </para>
 /// </remarks>
 public interface ISqlConnectionFactory
@@ -28,6 +24,7 @@ public interface ISqlConnectionFactory
 public sealed class SqlConnectionFactory : ISqlConnectionFactory
 {
     private readonly string _connectionString;
+    private readonly string? _managedIdentityClientId;
     private readonly ILogger<SqlConnectionFactory> _log;
 
     public SqlConnectionFactory(IConfiguration config, ILogger<SqlConnectionFactory> log)
@@ -35,13 +32,30 @@ public sealed class SqlConnectionFactory : ISqlConnectionFactory
         _connectionString = config["Sql:ConnectionString"]
             ?? throw new InvalidOperationException(
                 "Sql:ConnectionString is not configured. Set it as an app-setting or in appsettings.json.");
+        _managedIdentityClientId = config["Sql:ManagedIdentityClientId"];
         _log = log;
     }
 
     public async Task<SqlConnection> OpenAsync(CancellationToken ct = default)
     {
         var builder = new SqlConnectionStringBuilder(_connectionString);
+        if (builder.Authentication == SqlAuthenticationMethod.ActiveDirectoryManagedIdentity &&
+            string.IsNullOrWhiteSpace(builder.UserID) &&
+            string.IsNullOrWhiteSpace(_managedIdentityClientId))
+        {
+            throw new InvalidOperationException(
+                "Sql:ManagedIdentityClientId is required when using Active Directory Managed Identity with a user-assigned identity.");
+        }
+
+        if (builder.Authentication == SqlAuthenticationMethod.ActiveDirectoryManagedIdentity &&
+            string.IsNullOrWhiteSpace(builder.UserID) &&
+            !string.IsNullOrWhiteSpace(_managedIdentityClientId))
+        {
+            builder.UserID = _managedIdentityClientId;
+        }
+
         var conn = new SqlConnection(_connectionString);
+        conn.ConnectionString = builder.ConnectionString;
 
         try
         {

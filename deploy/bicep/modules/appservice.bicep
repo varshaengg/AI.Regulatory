@@ -75,6 +75,7 @@ var telemetrySettings = empty(appInsightsConnString) ? [] : [
 var apiOnlySettings = isWeb ? [] : concat(
   empty(keyVaultUri)        ? [] : [ { name: 'KeyVault__Uri',              value: keyVaultUri } ],
   empty(sqlConnectionKvRef) ? [] : [ { name: 'ConnectionStrings__ArtaSql', value: sqlConnectionKvRef } ],
+  empty(userAssignedIdentityClientId) ? [] : [ { name: 'Sql__ManagedIdentityClientId', value: userAssignedIdentityClientId } ],
   empty(openAiEndpoint)     ? [] : [ { name: 'AzureOpenAi__Endpoint',      value: openAiEndpoint } ],
   empty(searchEndpoint)     ? [] : [ { name: 'AzureAISearch__Endpoint',    value: searchEndpoint } ]
 )
