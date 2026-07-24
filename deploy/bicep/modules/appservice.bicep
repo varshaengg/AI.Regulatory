@@ -134,4 +134,4 @@ resource staging 'Microsoft.Web/sites/slots@2024-04-01' = if (!isWeb && enableSt
 
 output appServiceName   string = site.name
 output defaultHostName  string = 'https://${site.properties.defaultHostName}'
-output principalId      string = site.identity.principalId ?? ''
+output principalId      string = site.identity.?principalId ?? ''
