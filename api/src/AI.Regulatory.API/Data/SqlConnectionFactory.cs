@@ -26,11 +26,15 @@ public sealed class SqlConnectionFactory : ISqlConnectionFactory
 
     public SqlConnectionFactory(IConfiguration config, ILogger<SqlConnectionFactory> log)
     {
-        _connectionString =
-            config.GetConnectionString("ArtaSql")
-            ?? config["Sql:ConnectionString"]
-            ?? throw new InvalidOperationException(
-                "ConnectionStrings:ArtaSql or Sql:ConnectionString is not configured.");
+        var artaConnectionString = config.GetConnectionString("ArtaSql");
+        var sqlConnectionString = config["Sql:ConnectionString"];
+
+        _connectionString = !string.IsNullOrWhiteSpace(artaConnectionString)
+            ? artaConnectionString
+            : !string.IsNullOrWhiteSpace(sqlConnectionString)
+                ? sqlConnectionString
+                : throw new InvalidOperationException(
+                    "ConnectionStrings:ArtaSql or Sql:ConnectionString must be configured with a non-empty value.");
         _log = log;
     }
 

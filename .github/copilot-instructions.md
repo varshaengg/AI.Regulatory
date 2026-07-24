@@ -239,14 +239,15 @@ python validate_model.py --test-data [TEST_DATA_PATH]
 
 ### Code Review Checklist
 
-<!-- TODO: Add code review criteria -->
-
-- [ ] Power Platform solution follows best practices and naming conventions
-- [ ] .NET code follows SOLID principles and coding standards
-- [ ] Python code follows PEP 8 and includes proper documentation
-- [ ] Data Science models include validation and testing
-- [ ] Security requirements are met for the technology stack
-- [ ] Performance considerations are addressed
+- [ ] API and SPA paths match the repo layout (`api/` backend, `src/` frontend)
+- [ ] Azure SQL access uses Managed Identity only; no manual `AccessToken` handling
+- [ ] UAMI client ID is passed explicitly when `Authentication=Active Directory Managed Identity` is used
+- [ ] App Service and pipeline settings keep code-owned and infra-owned app settings separated
+- [ ] Database changes are reflected in DACPAC/post-deploy seed scripts and idempotent on rerun
+- [ ] No hardcoded secrets, passwords, or connection strings are introduced
+- [ ] Health checks, smoke tests, and deployment gates still cover the changed path
+- [ ] Any behavior change is reflected in docs or pipeline config where applicable
+- [ ] Code was reviewed end-to-end before push; no assumptions or hallucinated behavior were introduced
 
 ## Documentation
 
