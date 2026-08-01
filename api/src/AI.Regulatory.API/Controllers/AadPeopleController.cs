@@ -31,13 +31,16 @@ public sealed class AadPeopleController : ControllerBase
     private readonly AadPeopleRepository _repo;
     private readonly GraphServiceClient? _graph;
     private readonly AppUsersRepository? _users;
+    private readonly ILogger<AadPeopleController> _log;
 
     public AadPeopleController(
         AadPeopleRepository repo,
+        ILogger<AadPeopleController> log,
         AppUsersRepository? users = null,
         GraphServiceClient? graph = null)
     {
         _repo = repo;
+        _log  = log;
         _users = users;
         _graph = graph;
     }
@@ -68,6 +71,7 @@ public sealed class AadPeopleController : ControllerBase
                 cfg.QueryParameters.Search = searchExpr;
                 cfg.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle" };
                 cfg.QueryParameters.Top    = pageSize;
+                cfg.QueryParameters.Count  = true;   // required alongside ConsistencyLevel:eventual for $search
                 cfg.Headers.Add("ConsistencyLevel", "eventual");
             }, ct);
 
@@ -83,6 +87,7 @@ public sealed class AadPeopleController : ControllerBase
         }
         catch (Exception ex)
         {
+            _log.LogWarning(ex, "Graph $search failed for query={Query}; falling back to seed/DB", search);
             // Fall back to seed repo when Graph call fails (e.g., OBO failure).
             // Also attempt to resolve from already-enrolled AppUser rows if available.
             try
