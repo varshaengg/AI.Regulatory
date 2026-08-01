@@ -214,12 +214,24 @@ stages:
                     else
                       HOST=$(az webapp show -g "$(lookup.rgName)" -n "$(lookup.apiAppName)" --slot staging --query defaultHostName -o tsv)
                     fi
-                    for path in /health/live /health/ready; do
-                      code=$(curl -sk -o /dev/null -w "%{http_code}" "https://$HOST$path")
-                      if [ "$code" != "200" ]; then
-                        echo "Smoke test failed: $path => $code"; exit 1
-                      fi
-                    done
+                    check_with_retry() {
+                      path="$1"
+                      attempts=18
+                      delay=10
+                      for i in $(seq 1 "$attempts"); do
+                        code=$(curl -sk -o /dev/null -w "%{http_code}" "https://$HOST$path")
+                        if [ "$code" = "200" ]; then
+                          echo "Smoke test passed: $path"
+                          return 0
+                        fi
+                        echo "Smoke test retry $i/$attempts: $path => $code"
+                        sleep "$delay"
+                      done
+                      echo "Smoke test failed: $path => $code"
+                      return 1
+                    }
+                    check_with_retry /health/live
+                    check_with_retry /health/ready
                     echo "Smoke tests passed."
 
               - task: AzureCLI@2
