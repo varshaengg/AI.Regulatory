@@ -11,54 +11,43 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$ManagedIdentityName,
 
-    [Parameter(Mandatory=$true)]
+    # ObjectId is kept as a parameter for documentation / audit purposes but is
+    # no longer used in the SID calculation — CREATE USER … FROM EXTERNAL PROVIDER
+    # lets SQL Server resolve the SID directly from Azure AD, avoiding the
+    # endian-mismatch bug that occurs when deriving the SID from Guid.ToByteArray().
+    [Parameter(Mandatory=$false)]
     [string]$ManagedIdentityObjectId
 )
 
 $ErrorActionPreference = 'Stop'
 
-Write-Host "Granting SQL permissions to managed identity: $ManagedIdentityName (OID: $ManagedIdentityObjectId)"
+Write-Host "Granting SQL permissions to managed identity: $ManagedIdentityName"
 
-# Convert object ID to SQL SID (16-byte little-endian)
-$oid = [guid]::Parse($ManagedIdentityObjectId)
-$sid = [System.BitConverter]::ToString($oid.ToByteArray()).Replace('-', '')
-
-# Build the T-SQL command
 $sql = @"
 DECLARE @miName SYSNAME = N'$ManagedIdentityName';
 DECLARE @miNameQ NVARCHAR(500) = QUOTENAME(@miName);
-DECLARE @miOid UNIQUEIDENTIFIER = CAST(N'$ManagedIdentityObjectId' AS UNIQUEIDENTIFIER);
-DECLARE @miSid VARBINARY(85) = CAST(@miOid AS VARBINARY(16));
 DECLARE @sql NVARCHAR(MAX);
 
-IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE [name] = @miName)
+-- Drop any existing user that may have been created with a manually-computed
+-- SID (which suffers from a .NET Guid.ToByteArray() endian-mismatch against
+-- the UUID bytes stored by Azure SQL).  FROM EXTERNAL PROVIDER re-resolves
+-- the SID correctly by querying Azure AD.
+IF EXISTS (SELECT 1 FROM sys.database_principals WHERE [name] = @miName)
 BEGIN
-    SET @sql = N'CREATE USER ' + @miNameQ +
-               N' WITH SID = ' + CONVERT(NVARCHAR(200), @miSid, 1) +
-               N', TYPE = E;';
+    SET @sql = N'DROP USER ' + @miNameQ;
     EXEC sys.sp_executesql @sql;
-    PRINT N'Created contained user ' + @miName + N' with SID=' + CONVERT(NVARCHAR(200), @miSid, 1);
+    PRINT N'Dropped existing user ' + @miName + N' (will recreate via FROM EXTERNAL PROVIDER).';
 END
-ELSE
-BEGIN
-    PRINT N'Contained user ' + @miName + N' already exists.';
-END
+
+SET @sql = N'CREATE USER ' + @miNameQ + N' FROM EXTERNAL PROVIDER;';
+EXEC sys.sp_executesql @sql;
+PRINT N'Created contained user ' + @miName + N' (SID resolved by Azure AD).';
 
 SET @sql = N'ALTER ROLE db_datareader ADD MEMBER ' + @miNameQ + N';';
-BEGIN TRY
-    EXEC sys.sp_executesql @sql;
-END TRY
-BEGIN CATCH
-    PRINT ERROR_MESSAGE();
-END CATCH
+BEGIN TRY EXEC sys.sp_executesql @sql; END TRY BEGIN CATCH PRINT ERROR_MESSAGE(); END CATCH
 
 SET @sql = N'ALTER ROLE db_datawriter ADD MEMBER ' + @miNameQ + N';';
-BEGIN TRY
-    EXEC sys.sp_executesql @sql;
-END TRY
-BEGIN CATCH
-    PRINT ERROR_MESSAGE();
-END CATCH
+BEGIN TRY EXEC sys.sp_executesql @sql; END TRY BEGIN CATCH PRINT ERROR_MESSAGE(); END CATCH
 
 PRINT N'Granted db_datareader + db_datawriter to ' + @miName;
 "@
@@ -66,7 +55,6 @@ PRINT N'Granted db_datareader + db_datawriter to ' + @miName;
 Write-Host "Executing SQL script..."
 Write-Host $sql
 
-# Connect and execute
 $connectionString = "Server=$SqlServer;Database=$Database;Authentication=Active Directory Interactive;Encrypt=true;TrustServerCertificate=false;Connection Timeout=30;"
 
 try {
