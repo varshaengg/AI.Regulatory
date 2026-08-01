@@ -62,7 +62,7 @@ public sealed class AadPeopleController : ControllerBase
         // Live mode — call Graph via OBO. $search requires ConsistencyLevel:eventual.
         var pageSize = Math.Clamp(top, 1, 25);
         var quoted = search.Replace("\"", string.Empty);
-        var searchExpr = $"\"displayName:{quoted}\" OR \"mail:{quoted}\"";
+        var searchExpr = $"\"displayName:{quoted}\" OR \"mail:{quoted}\" OR \"userPrincipalName:{quoted}\"";
 
         try
         {
@@ -87,25 +87,14 @@ public sealed class AadPeopleController : ControllerBase
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "Graph $search failed for query={Query}; falling back to seed/DB", search);
-            // Fall back to seed repo when Graph call fails (e.g., OBO failure).
-            // Also attempt to resolve from already-enrolled AppUser rows if available.
+            _log.LogWarning(ex, "Graph $search failed for query={Query}; falling back to seed list", search);
+            // For typeahead, return quickly. Do not hit SQL fallback here because
+            // database/network latency can make the picker feel broken and cause
+            // repeated client-side cancellations while typing.
             try
             {
                 var seed = await _repo.Search(search, top, ct);
                 if (seed.Any()) return Ok(seed);
-
-                if (_users is not null)
-                {
-                    var all = await _users.ListAsync(ct);
-                    var matches = all
-                        .Where                        (x => (x.DisplayName ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
-                                                         || (x.Email ?? "").Contains(search, StringComparison.OrdinalIgnoreCase))
-                        .Take(pageSize)
-                        .Select(u => new AadPerson(u.AadObjectId, u.DisplayName, u.Email, u.JobTitle ?? string.Empty))
-                        .ToArray();
-                    if (matches.Any()) return Ok(matches);
-                }
             }
             catch { /* swallow secondary errors and continue to empty result */ }
 
