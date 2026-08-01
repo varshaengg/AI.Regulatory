@@ -26,7 +26,10 @@ export const msalConfig: Configuration = {
   },
   cache: {
     cacheLocation: "sessionStorage", // keeps user signed in for the browser session
-    storeAuthStateInCookie: false,
+    // Required for browsers that block third-party cookies (Chrome, Edge, Firefox, Safari).
+    // MSAL's silent iframe renewal sets cookies that must be readable; without this flag
+    // the hidden iframe times out with a "timed_out" BrowserAuthError.
+    storeAuthStateInCookie: true,
   },
   system: {
     loggerOptions: {

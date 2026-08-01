@@ -2,7 +2,7 @@
 // attaches it as Bearer on every request. Throws `ApiError` on non-2xx.
 
 import type { IPublicClientApplication, AccountInfo } from "@azure/msal-browser";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
+import { InteractionRequiredAuthError, BrowserAuthError } from "@azure/msal-browser";
 import { apiRequest, apiBaseUrl } from "../auth/msalConfig";
 import { ApiError, type ProblemDetails } from "./types";
 
@@ -27,7 +27,13 @@ async function bearerToken(): Promise<string> {
     const result = await msal.acquireTokenSilent({ ...apiRequest, account });
     return result.accessToken;
   } catch (err) {
-    if (err instanceof InteractionRequiredAuthError) {
+    // InteractionRequiredAuthError: consent or MFA needed.
+    // BrowserAuthError "timed_out": silent iframe blocked by third-party cookie policy.
+    // Both require a full redirect to re-authenticate.
+    if (
+      err instanceof InteractionRequiredAuthError ||
+      (err instanceof BrowserAuthError && err.errorCode === "timed_out")
+    ) {
       await msal.acquireTokenRedirect({ ...apiRequest, account });
       throw new Error("Redirecting to re-authenticate…");
     }
