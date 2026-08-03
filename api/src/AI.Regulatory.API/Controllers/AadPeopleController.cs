@@ -59,20 +59,22 @@ public sealed class AadPeopleController : ControllerBase
         if (_graph is null)
             return Ok(await _repo.Search(search, top, ct));
 
-        // Live mode — call Graph via OBO. $search requires ConsistencyLevel:eventual.
+        // Live mode — call Graph via OBO.
+        // Use $filter with startsWith rather than $search because $search tokenises
+        // email addresses (splitting on '@', '.') so "rauser" never matches the
+        // token "rauser1" inside "rauser1@contoso.com". startsWith does prefix
+        // matching on the full field value and correctly handles email prefixes.
         var pageSize = Math.Clamp(top, 1, 25);
-        var quoted = search.Replace("\"", string.Empty);
-        var searchExpr = $"\"displayName:{quoted}\" OR \"mail:{quoted}\" OR \"userPrincipalName:{quoted}\"";
+        var safe = search.Replace("'", "''");   // escape single quotes for OData
+        var filterExpr = $"startsWith(displayName,'{safe}') or startsWith(mail,'{safe}') or startsWith(userPrincipalName,'{safe}')";
 
         try
         {
             var users = await _graph.Users.GetAsync(cfg =>
             {
-                cfg.QueryParameters.Search = searchExpr;
+                cfg.QueryParameters.Filter = filterExpr;
                 cfg.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle" };
                 cfg.QueryParameters.Top    = pageSize;
-                cfg.QueryParameters.Count  = true;   // required alongside ConsistencyLevel:eventual for $search
-                cfg.Headers.Add("ConsistencyLevel", "eventual");
             }, ct);
 
             var results = (users?.Value ?? new List<Microsoft.Graph.Models.User>())
