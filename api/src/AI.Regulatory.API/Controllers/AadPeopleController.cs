@@ -60,13 +60,30 @@ public sealed class AadPeopleController : ControllerBase
             return Ok(await _repo.Search(search, top, ct));
 
         // Live mode — call Graph via OBO.
-        // Use $filter with startsWith rather than $search because $search tokenises
-        // email addresses (splitting on '@', '.') so "rauser" never matches the
-        // token "rauser1" inside "rauser1@contoso.com". startsWith does prefix
-        // matching on the full field value and correctly handles email prefixes.
+        // Strategy:
+        //   • If input looks like an email (contains '@'), do an exact eq lookup on
+        //     mail/userPrincipalName — no ConsistencyLevel needed, no OData issues.
+        //   • Otherwise use startsWith across displayName/mail/userPrincipalName.
+        //     Multi-field OR with startsWith is an "advanced query" in Graph and
+        //     REQUIRES ConsistencyLevel:eventual + $count=true or Graph returns 400.
         var pageSize = Math.Clamp(top, 1, 25);
         var safe = search.Replace("'", "''");   // escape single quotes for OData
-        var filterExpr = $"startsWith(displayName,'{safe}') or startsWith(mail,'{safe}') or startsWith(userPrincipalName,'{safe}')";
+
+        string filterExpr;
+        bool needsAdvancedQuery;
+
+        if (safe.Contains('@'))
+        {
+            // exact match on full email address
+            filterExpr = $"mail eq '{safe}' or userPrincipalName eq '{safe}'";
+            needsAdvancedQuery = false;
+        }
+        else
+        {
+            // prefix match — advanced query: requires ConsistencyLevel + $count
+            filterExpr = $"startsWith(displayName,'{safe}') or startsWith(mail,'{safe}') or startsWith(userPrincipalName,'{safe}')";
+            needsAdvancedQuery = true;
+        }
 
         try
         {
@@ -75,6 +92,11 @@ public sealed class AadPeopleController : ControllerBase
                 cfg.QueryParameters.Filter = filterExpr;
                 cfg.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle" };
                 cfg.QueryParameters.Top    = pageSize;
+                if (needsAdvancedQuery)
+                {
+                    cfg.QueryParameters.Count = true;
+                    cfg.Headers.Add("ConsistencyLevel", "eventual");
+                }
             }, ct);
 
             var results = (users?.Value ?? new List<Microsoft.Graph.Models.User>())
