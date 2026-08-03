@@ -52,20 +52,22 @@ public sealed class AadPeopleController : ControllerBase
         [FromQuery] string search, [FromQuery] int top = 10, CancellationToken ct = default)
     {
         search = (search ?? string.Empty).Trim();
-        if (search.Length < 3) return Ok(Array.Empty<AadPerson>());
+        if (search.Length < 1) return Ok(Array.Empty<AadPerson>());
 
         // Fall back to the in-memory seed only when there's no Graph client at
         // all (no EntraId config — happens in local dev / smoke deploys).
         if (_graph is null)
             return Ok(await _repo.Search(search, top, ct));
 
-        // Live mode — call Graph via OBO.
+        // Live mode — call Graph via managed identity (UAMI, application permission).
         // Strategy:
         //   • If input looks like an email (contains '@'), do an exact eq lookup on
-        //     mail/userPrincipalName — no ConsistencyLevel needed, no OData issues.
-        //   • Otherwise use startsWith across displayName/mail/userPrincipalName.
-        //     Multi-field OR with startsWith is an "advanced query" in Graph and
-        //     REQUIRES ConsistencyLevel:eventual + $count=true or Graph returns 400.
+        //     mail/userPrincipalName — no advanced query headers needed.
+        //   • Otherwise use startsWith across displayName + mail + userPrincipalName.
+        //     Multi-field OR with startsWith is an "advanced query" — requires
+        //     ConsistencyLevel:eventual + $count=true.
+        //     With UAMI User.ReadBasic.All Application permission all three fields
+        //     are searchable (mail and UPN need the advanced query flag).
         var pageSize = Math.Clamp(top, 1, 25);
         var safe = search.Replace("'", "''");   // escape single quotes for OData
 
@@ -74,16 +76,18 @@ public sealed class AadPeopleController : ControllerBase
 
         if (safe.Contains('@'))
         {
-            // exact match on full email address
+            // exact match on full email address — no ConsistencyLevel needed
             filterExpr = $"mail eq '{safe}' or userPrincipalName eq '{safe}'";
             needsAdvancedQuery = false;
         }
         else
         {
-            // prefix match — advanced query: requires ConsistencyLevel + $count
+            // prefix match across displayName, mail and UPN — advanced query
             filterExpr = $"startsWith(displayName,'{safe}') or startsWith(mail,'{safe}') or startsWith(userPrincipalName,'{safe}')";
             needsAdvancedQuery = true;
         }
+
+        _log.LogDebug("Graph people search: filter={Filter}, advanced={Advanced}", filterExpr, needsAdvancedQuery);
 
         try
         {
@@ -92,6 +96,7 @@ public sealed class AadPeopleController : ControllerBase
                 cfg.QueryParameters.Filter = filterExpr;
                 cfg.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle" };
                 cfg.QueryParameters.Top    = pageSize;
+                cfg.QueryParameters.Orderby = new[] { "displayName" };
                 if (needsAdvancedQuery)
                 {
                     cfg.QueryParameters.Count = true;
@@ -107,11 +112,12 @@ public sealed class AadPeopleController : ControllerBase
                     JobTitle:    u.JobTitle ?? string.Empty))
                 .ToArray();
 
+            _log.LogDebug("Graph people search returned {Count} results for query={Query}", results.Length, search);
             return Ok(results);
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "Graph $search failed for query={Query}; falling back to seed list", search);
+            _log.LogWarning(ex, "Graph people search failed for query={Query}, filter={Filter}; falling back to seed list", search, filterExpr);
             // For typeahead, return quickly. Do not hit SQL fallback here because
             // database/network latency can make the picker feel broken and cause
             // repeated client-side cancellations while typing.

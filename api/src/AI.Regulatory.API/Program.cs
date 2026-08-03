@@ -70,16 +70,16 @@ if (entraConfigured)
 {
     builder.Services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddMicrosoftIdentityWebApi(entraSection)
-            // Enable On-Behalf-Of flow so the API can exchange the caller's user
-            // token for a Graph token (people picker in A5).
-            .EnableTokenAcquisitionToCallDownstreamApi()
-                .AddMicrosoftGraph(
-                    // Delegated People-Picker scope. User.ReadBasic.All returns
-                    // just displayName / mail / jobTitle / id which is exactly
-                    // what A5 needs — admin consent required once per tenant.
-                    defaultScopes: new[] { "User.ReadBasic.All" })
-                .AddInMemoryTokenCaches();
+        .AddMicrosoftIdentityWebApi(entraSection);
+
+    // Graph client using managed identity (UAMI via DefaultAzureCredential).
+    // No client secret required. Requires the UAMI to have
+    // "User.ReadBasic.All" Application permission on Microsoft Graph
+    // (grant via Entra → Enterprise Apps → id-ra-dev-sin-workload → Permissions).
+    // AZURE_CLIENT_ID app setting on App Service selects the correct UAMI.
+    builder.Services.AddSingleton(new Microsoft.Graph.GraphServiceClient(
+        new Azure.Identity.DefaultAzureCredential(),
+        new[] { "https://graph.microsoft.com/.default" }));
 }
 else
 {
