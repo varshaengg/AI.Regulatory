@@ -70,16 +70,14 @@ if (entraConfigured)
 {
     builder.Services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddMicrosoftIdentityWebApi(entraSection);
-
-    // Graph client using managed identity (UAMI via DefaultAzureCredential).
-    // No client secret required. Requires the UAMI to have
-    // "User.ReadBasic.All" Application permission on Microsoft Graph
-    // (grant via Entra → Enterprise Apps → id-ra-dev-sin-workload → Permissions).
-    // AZURE_CLIENT_ID app setting on App Service selects the correct UAMI.
-    builder.Services.AddSingleton(new Microsoft.Graph.GraphServiceClient(
-        new Azure.Identity.DefaultAzureCredential(),
-        new[] { "https://graph.microsoft.com/.default" }));
+        .AddMicrosoftIdentityWebApi(entraSection)
+            // OBO flow: exchange the SPA user token for a Graph token so Graph
+            // is called with the user's delegated identity (not app identity).
+            // Requires EntraId__ClientSecret app setting + delegated
+            // User.ReadBasic.All with admin consent on the API app registration.
+            .EnableTokenAcquisitionToCallDownstreamApi()
+                .AddMicrosoftGraph(defaultScopes: new[] { "User.ReadBasic.All" })
+                .AddInMemoryTokenCaches();
 }
 else
 {
