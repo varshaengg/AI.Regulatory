@@ -16,6 +16,13 @@ namespace AI.Regulatory.API.Data;
 /// </remarks>
 public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrixEntry>
 {
+    private sealed class LookupIds
+    {
+        public int? PersonaId { get; init; }
+        public int? FeatureId { get; init; }
+        public int? PermissionId { get; init; }
+    }
+
     private static readonly string[] AdminImplies = { "Read", "Write", "Review", "Admin" };
 
     private readonly ISqlConnectionFactory _sql;
@@ -90,7 +97,7 @@ public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrix
                 (SELECT [Id] FROM [dbo].[Persona]    WHERE [Code] = @Persona)    AS PersonaId,
                 (SELECT [Id] FROM [dbo].[Feature]    WHERE [Code] = @Feature)    AS FeatureId,
                 (SELECT [Id] FROM [dbo].[Permission] WHERE [Code] = @Permission) AS PermissionId;";
-        var ids = await c.QuerySingleAsync<(int? PersonaId, int? FeatureId, int? PermissionId)>(
+        var ids = await c.QuerySingleAsync<LookupIds>(
             new CommandDefinition(LookupSql,
                 new { Persona = req.PersonaCode, Feature = req.FeatureCode, Permission = req.PermissionCode },
                 cancellationToken: ct));
@@ -99,6 +106,13 @@ public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrix
             throw new InvalidOperationException(
                 $"Unknown code(s): persona={req.PersonaCode}, feature={req.FeatureCode}, permission={req.PermissionCode}.");
 
+        var key = new
+        {
+            PersonaId = ids.PersonaId.Value,
+            FeatureId = ids.FeatureId.Value,
+            PermissionId = ids.PermissionId.Value,
+        };
+
         if (req.Granted)
         {
             const string InsertSql = @"
@@ -106,14 +120,14 @@ public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrix
                                WHERE [PersonaId]=@PersonaId AND [FeatureId]=@FeatureId AND [PermissionId]=@PermissionId)
                     INSERT INTO [dbo].[PersonaPermission] ([PersonaId],[FeatureId],[PermissionId])
                     VALUES (@PersonaId,@FeatureId,@PermissionId);";
-            await c.ExecuteAsync(new CommandDefinition(InsertSql, ids, cancellationToken: ct));
+            await c.ExecuteAsync(new CommandDefinition(InsertSql, key, cancellationToken: ct));
         }
         else
         {
             const string DeleteSql = @"
                 DELETE FROM [dbo].[PersonaPermission]
                 WHERE [PersonaId]=@PersonaId AND [FeatureId]=@FeatureId AND [PermissionId]=@PermissionId;";
-            await c.ExecuteAsync(new CommandDefinition(DeleteSql, ids, cancellationToken: ct));
+            await c.ExecuteAsync(new CommandDefinition(DeleteSql, key, cancellationToken: ct));
         }
         return entry;
     }
