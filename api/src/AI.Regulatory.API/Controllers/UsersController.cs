@@ -34,7 +34,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = AuthPolicies.UserManagementAdmin)]
+    [Authorize(Policy = AuthPolicies.UserManagementWrite)]
     [ProducesResponseType(typeof(AppUser), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<AppUser>> Create(
@@ -48,7 +48,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{id}/personas")]
-    [Authorize(Policy = AuthPolicies.UserManagementAdmin)]
+    [Authorize(Policy = AuthPolicies.UserManagementWrite)]
     [ProducesResponseType(typeof(AppUser), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AppUser>> AssignPersonas(

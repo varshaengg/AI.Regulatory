@@ -10,6 +10,7 @@ public static class AuthPolicies
 
     public const string AdminOnly            = "AdminOnly";
     public const string UserManagementRead  = "UserManagementRead";
+    public const string UserManagementWrite = "UserManagementWrite";
     public const string UserManagementAdmin = "UserManagementAdmin";
     public const string TemplatesRead       = "TemplatesRead";
     public const string TemplatesAdmin      = "TemplatesAdmin";

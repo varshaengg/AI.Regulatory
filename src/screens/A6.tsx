@@ -14,6 +14,12 @@ import type {
 import { useApi, ErrorBanner } from "../api/useApi";
 import { usePermissions } from "../api/usePermissions";
 
+// Verbs that don't apply to specific features — hidden in the matrix UI.
+// Admin still implies all lower verbs; this only controls what can be granted.
+const FEATURE_EXCLUDED_VERBS: Record<string, readonly string[]> = {
+  UserManagement: ["Review"], // no approval workflow on users
+};
+
 export default function A6Screen() {
   const perms = usePermissions();
   const canWrite = perms.hasPermission("UserManagement", "Admin");
@@ -120,24 +126,32 @@ export default function A6Screen() {
             <thead>
               <tr style={{ backgroundColor: C.bg2 }}>
                 <th style={thHeader}>Persona</th>
-                {features.data.map((f) => (
-                  <th key={f.code} colSpan={verbs.data.length} style={{ ...thHeader, borderLeft: `1px solid ${C.border1}` }}>
-                    <div style={{ fontWeight: 600, color: C.text1 }}>{f.name}</div>
-                    <div style={{ fontWeight: 400, color: C.text3, fontSize: 10 }}>{f.category}</div>
-                  </th>
-                ))}
+                {features.data.map((f) => {
+                  const excluded = FEATURE_EXCLUDED_VERBS[f.code] ?? [];
+                  const featureVerbs = verbs.data.filter((v) => !excluded.includes(v.code));
+                  return (
+                    <th key={f.code} colSpan={featureVerbs.length} style={{ ...thHeader, borderLeft: `1px solid ${C.border1}` }}>
+                      <div style={{ fontWeight: 600, color: C.text1 }}>{f.name}</div>
+                      <div style={{ fontWeight: 400, color: C.text3, fontSize: 10 }}>{f.category}</div>
+                    </th>
+                  );
+                })}
               </tr>
               <tr>
                 <th style={thSubHeader}></th>
-                {features.data.map((f) => (
-                  <React.Fragment key={f.code}>
-                    {verbs.data.map((v) => (
-                      <th key={`${f.code}-${v.code}`} style={{ ...thSubHeader, borderLeft: `1px solid ${C.border1}`, minWidth: 56 }}>
-                        {v.name}
-                      </th>
-                    ))}
-                  </React.Fragment>
-                ))}
+                {features.data.map((f) => {
+                  const excluded = FEATURE_EXCLUDED_VERBS[f.code] ?? [];
+                  const featureVerbs = verbs.data.filter((v) => !excluded.includes(v.code));
+                  return (
+                    <React.Fragment key={f.code}>
+                      {featureVerbs.map((v) => (
+                        <th key={`${f.code}-${v.code}`} style={{ ...thSubHeader, borderLeft: `1px solid ${C.border1}`, minWidth: 56 }}>
+                          {v.name}
+                        </th>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -147,9 +161,12 @@ export default function A6Screen() {
                     <div>{p.name}</div>
                     <div style={{ fontSize: 10, color: C.text3, fontWeight: 400 }}>{p.description}</div>
                   </td>
-                  {features.data.map((f) => (
+                  {features.data.map((f) => {
+                  const excluded = FEATURE_EXCLUDED_VERBS[f.code] ?? [];
+                  const featureVerbs = verbs.data.filter((v) => !excluded.includes(v.code));
+                  return (
                     <React.Fragment key={f.code}>
-                      {verbs.data.map((v) => {
+                      {featureVerbs.map((v) => {
                         const verb = v.code as PermissionCode;
                         const implied = isImpliedByAdmin(p.code, f.code, verb);
                         const on = isGranted(p.code, f.code, verb);
@@ -170,7 +187,8 @@ export default function A6Screen() {
                         );
                       })}
                     </React.Fragment>
-                  ))}
+                  );
+                  })}
                 </tr>
               ))}
             </tbody>

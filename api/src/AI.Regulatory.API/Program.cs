@@ -102,6 +102,12 @@ builder.Services.AddAuthorization(options =>
         p.RequireAssertion(ctx =>
             ctx.User.IsInRole("admin")
             || HasPermission(ctx.User, "UserManagement", "Read")
+            || HasPermission(ctx.User, "UserManagement", "Write")
+            || HasPermission(ctx.User, "UserManagement", "Admin")));
+    options.AddPolicy(AuthPolicies.UserManagementWrite, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "UserManagement", "Write")
             || HasPermission(ctx.User, "UserManagement", "Admin")));
     options.AddPolicy(AuthPolicies.UserManagementAdmin, p =>
         p.RequireAssertion(ctx =>
