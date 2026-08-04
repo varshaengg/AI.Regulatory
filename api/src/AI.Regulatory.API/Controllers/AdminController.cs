@@ -9,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Admin overview — A1.</summary>
 [ApiController]
 [Route("api/v1/admin")]
-[Authorize(Policy = AuthPolicies.UserManagementAdmin)]
+[Authorize(Policy = AuthPolicies.UserManagementRead)]
 [Tags("Admin")]
 [Produces("application/json")]
 public sealed class AdminController : ControllerBase

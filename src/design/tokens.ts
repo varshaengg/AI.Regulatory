@@ -67,10 +67,10 @@ export const navGroups: {
   }[];
 }[] = [
   { label: "Admin", featureCode: undefined, items: [
-    { id: "A1", label: "Admin home", featureCode: "UserManagement", requiredVerb: "Admin" },
-    { id: "A2", label: "CTD templates", featureCode: "Templates", requiredVerb: "Admin" },
+    { id: "A1", label: "Admin home", featureCode: "UserManagement", requiredVerb: "Read" },
+    { id: "A2", label: "CTD templates", featureCode: "Templates", requiredVerb: "Read" },
     { id: "A3", label: "Upload template", featureCode: "Templates", requiredVerb: "Admin" },
-    { id: "A5", label: "User management", featureCode: "UserManagement", requiredVerb: "Admin" },
+    { id: "A5", label: "User management", featureCode: "UserManagement", requiredVerb: "Read" },
     { id: "A6", label: "Permission matrix", featureCode: "UserManagement", requiredVerb: "Admin" },
   ]},
   { label: "RA Lead", featureCode: "DossierManagement", items: [

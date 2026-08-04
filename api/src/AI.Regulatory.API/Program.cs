@@ -96,10 +96,22 @@ builder.Services.AddAuthorization(options =>
 
     // Roles are enriched from AppUsers/Persona data on each request by
     // DbRoleClaimsTransformation, so policy checks use DB-managed access.
-    options.AddPolicy(AuthPolicies.AdminOnly,     p => p.RequireRole("admin"));
+    options.AddPolicy(AuthPolicies.AdminOnly, p => p.RequireRole("admin"));
+
+    options.AddPolicy(AuthPolicies.UserManagementRead, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "UserManagement", "Read")
+            || HasPermission(ctx.User, "UserManagement", "Admin")));
     options.AddPolicy(AuthPolicies.UserManagementAdmin, p =>
         p.RequireAssertion(ctx =>
             ctx.User.IsInRole("admin") || HasPermission(ctx.User, "UserManagement", "Admin")));
+
+    options.AddPolicy(AuthPolicies.TemplatesRead, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "Templates", "Read")
+            || HasPermission(ctx.User, "Templates", "Admin")));
     options.AddPolicy(AuthPolicies.TemplatesAdmin, p =>
         p.RequireAssertion(ctx =>
             ctx.User.IsInRole("admin") || HasPermission(ctx.User, "Templates", "Admin")));

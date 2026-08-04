@@ -8,10 +8,12 @@ public static class AuthPolicies
 {
     public const string PermissionClaimType = "ara_perm";
 
-    public const string AdminOnly      = "AdminOnly";
+    public const string AdminOnly            = "AdminOnly";
+    public const string UserManagementRead  = "UserManagementRead";
     public const string UserManagementAdmin = "UserManagementAdmin";
+    public const string TemplatesRead       = "TemplatesRead";
     public const string TemplatesAdmin      = "TemplatesAdmin";
-    public const string RaLeadOrAdmin  = "RaLeadOrAdmin";
-    public const string AuthorScope    = "AuthorScope";
-    public const string ReviewerScope  = "ReviewerScope";
+    public const string RaLeadOrAdmin       = "RaLeadOrAdmin";
+    public const string AuthorScope         = "AuthorScope";
+    public const string ReviewerScope       = "ReviewerScope";
 }

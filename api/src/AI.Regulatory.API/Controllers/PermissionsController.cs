@@ -15,7 +15,6 @@ namespace AI.Regulatory.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/permissions")]
-[Authorize(Policy = AuthPolicies.UserManagementAdmin)]
 [Tags("Permissions (A6)")]
 [Produces("application/json")]
 public sealed class PermissionsController : ControllerBase
@@ -36,24 +35,28 @@ public sealed class PermissionsController : ControllerBase
 
     /// <summary>All permission verbs (Read/Write/Review/Admin).</summary>
     [HttpGet("verbs")]
+    [Authorize(Policy = AuthPolicies.UserManagementRead)]
     [ProducesResponseType(typeof(IReadOnlyList<Permission>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<Permission>>> Verbs(CancellationToken ct)
         => Ok(await _permissions.ListAsync(ct));
 
     /// <summary>All features that participate in the matrix.</summary>
     [HttpGet("features")]
+    [Authorize(Policy = AuthPolicies.UserManagementRead)]
     [ProducesResponseType(typeof(IReadOnlyList<Feature>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<Feature>>> Features(CancellationToken ct)
         => Ok(await _features.ListAsync(ct));
 
     /// <summary>Full matrix — sparse list of granted cells.</summary>
     [HttpGet("matrix")]
+    [Authorize(Policy = AuthPolicies.UserManagementRead)]
     [ProducesResponseType(typeof(IReadOnlyList<PermissionMatrixEntry>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<PermissionMatrixEntry>>> Matrix(CancellationToken ct)
         => Ok(await _matrix.GetMatrix(ct));
 
     /// <summary>Toggle one cell in the matrix (Admin persona only).</summary>
     [HttpPut("matrix")]
+    [Authorize(Policy = AuthPolicies.UserManagementAdmin)]
     [ProducesResponseType(typeof(PermissionMatrixEntry), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PermissionMatrixEntry>> Toggle(

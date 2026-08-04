@@ -10,7 +10,6 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>App users + their personas — A5.</summary>
 [ApiController]
 [Route("api/v1/users")]
-[Authorize(Policy = AuthPolicies.UserManagementAdmin)]
 [Tags("Users (A5)")]
 [Produces("application/json")]
 public sealed class UsersController : ControllerBase
@@ -19,11 +18,13 @@ public sealed class UsersController : ControllerBase
     public UsersController(AppUsersRepository users) => _users = users;
 
     [HttpGet]
+    [Authorize(Policy = AuthPolicies.UserManagementRead)]
     [ProducesResponseType(typeof(IReadOnlyList<AppUser>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<AppUser>>> List(CancellationToken ct)
         => Ok(await _users.ListAsync(ct));
 
     [HttpGet("{id}")]
+    [Authorize(Policy = AuthPolicies.UserManagementRead)]
     [ProducesResponseType(typeof(AppUser), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AppUser>> Get(string id, CancellationToken ct)
@@ -33,6 +34,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.UserManagementAdmin)]
     [ProducesResponseType(typeof(AppUser), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<AppUser>> Create(
@@ -46,6 +48,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{id}/personas")]
+    [Authorize(Policy = AuthPolicies.UserManagementAdmin)]
     [ProducesResponseType(typeof(AppUser), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AppUser>> AssignPersonas(
@@ -56,6 +59,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthPolicies.UserManagementAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
