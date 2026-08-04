@@ -9,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>CTD template catalog — A2/A3 admin screens.</summary>
 [ApiController]
 [Route("api/v1/templates")]
-[Authorize(Policy = AuthPolicies.AdminOnly)]
+[Authorize(Policy = AuthPolicies.TemplatesAdmin)]
 [Tags("Templates (M3)")]
 [Produces("application/json")]
 public sealed class TemplatesController : ControllerBase

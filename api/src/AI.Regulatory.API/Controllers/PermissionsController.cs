@@ -15,7 +15,7 @@ namespace AI.Regulatory.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/permissions")]
-[Authorize(Policy = AuthPolicies.AdminOnly)]
+[Authorize(Policy = AuthPolicies.UserManagementAdmin)]
 [Tags("Permissions (A6)")]
 [Produces("application/json")]
 public sealed class PermissionsController : ControllerBase

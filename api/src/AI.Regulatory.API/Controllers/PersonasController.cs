@@ -9,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Persona catalogue — feeds A5 add-user dialog + A6 matrix.</summary>
 [ApiController]
 [Route("api/v1/personas")]
-[Authorize(Policy = AuthPolicies.AdminOnly)]
+[Authorize(Policy = AuthPolicies.UserManagementAdmin)]
 [Tags("Personas (A5/A6)")]
 [Produces("application/json")]
 public sealed class PersonasController : ControllerBase

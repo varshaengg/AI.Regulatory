@@ -13,6 +13,15 @@ namespace AI.Regulatory.API.Controllers;
 [Tags("Me (M1)")]
 public sealed class MeController : ControllerBase
 {
+    private static readonly IReadOnlyDictionary<string, string> RoleToPersona =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["admin"] = "Admin",
+            ["raLead"] = "RaLead",
+            ["raAuthor"] = "RaAuthor",
+            ["raReviewer"] = "RaReviewer",
+        };
+
     private readonly AppUsersRepository _users;
     private readonly PermissionMatrixRepository _matrix;
     private readonly IConfiguration _config;
@@ -79,10 +88,18 @@ public sealed class MeController : ControllerBase
             }
         }
         if (personas.Count == 0)
-            personas = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
+        {
+            // Fallback for users authorized by token roles only:
+            // normalize role claim values to matrix persona codes so
+            // /me/permissions can resolve effective grants.
+            var roleClaims = User.FindAll(ClaimTypes.Role).Select(c => c.Value);
+            personas = roleClaims
+                .Select(role => RoleToPersona.TryGetValue(role, out var persona) ? persona : role)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
 
         var grants = await _matrix.GetEffectivePermissions(personas, ct);
         return Ok(new MePermissions(personas, grants));
     }
 }
-

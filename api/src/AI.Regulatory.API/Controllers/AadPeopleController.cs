@@ -24,7 +24,7 @@ namespace AI.Regulatory.API.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/v1/aad")]
-[Authorize(Policy = AuthPolicies.AdminOnly)]
+[Authorize(Policy = AuthPolicies.UserManagementAdmin)]
 [Tags("People (A5)")]
 [Produces("application/json")]
 public sealed class AadPeopleController : ControllerBase

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Security.Claims;
 using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Data;
 using AI.Regulatory.API.Errors;
@@ -90,9 +91,18 @@ else
 
 builder.Services.AddAuthorization(options =>
 {
+    static bool HasPermission(ClaimsPrincipal user, string featureCode, string verb) =>
+        user.HasClaim(AuthPolicies.PermissionClaimType, $"{featureCode}:{verb}");
+
     // Roles are enriched from AppUsers/Persona data on each request by
     // DbRoleClaimsTransformation, so policy checks use DB-managed access.
     options.AddPolicy(AuthPolicies.AdminOnly,     p => p.RequireRole("admin"));
+    options.AddPolicy(AuthPolicies.UserManagementAdmin, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin") || HasPermission(ctx.User, "UserManagement", "Admin")));
+    options.AddPolicy(AuthPolicies.TemplatesAdmin, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin") || HasPermission(ctx.User, "Templates", "Admin")));
     options.AddPolicy(AuthPolicies.RaLeadOrAdmin, p => p.RequireRole("raLead", "admin"));
     options.AddPolicy(AuthPolicies.AuthorScope,   p => p.RequireRole("raAuthor", "raLead", "admin"));
     options.AddPolicy(AuthPolicies.ReviewerScope, p => p.RequireRole("raReviewer", "raLead", "admin"));

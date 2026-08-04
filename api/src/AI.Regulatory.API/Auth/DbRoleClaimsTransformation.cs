@@ -11,6 +11,7 @@ namespace AI.Regulatory.API.Auth;
 /// </summary>
 public sealed class DbRoleClaimsTransformation(
     AppUsersRepository users,
+    PermissionMatrixRepository matrix,
     IConfiguration config) : IClaimsTransformation
 {
     private static readonly IReadOnlyDictionary<string, string> PersonaToRole =
@@ -44,6 +45,17 @@ public sealed class DbRoleClaimsTransformation(
             {
                 if (PersonaToRole.TryGetValue(persona, out var role))
                     roles.Add(role);
+            }
+
+            var grants = await matrix.GetEffectivePermissions(appUser.PersonaCodes, CancellationToken.None);
+            foreach (var grant in grants)
+            {
+                foreach (var verb in grant.Permissions)
+                {
+                    var value = $"{grant.FeatureCode}:{verb}";
+                    if (!identity.HasClaim(AuthPolicies.PermissionClaimType, value))
+                        identity.AddClaim(new Claim(AuthPolicies.PermissionClaimType, value));
+                }
             }
         }
 

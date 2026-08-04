@@ -10,7 +10,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>App users + their personas — A5.</summary>
 [ApiController]
 [Route("api/v1/users")]
-[Authorize(Policy = AuthPolicies.AdminOnly)]
+[Authorize(Policy = AuthPolicies.UserManagementAdmin)]
 [Tags("Users (A5)")]
 [Produces("application/json")]
 public sealed class UsersController : ControllerBase
