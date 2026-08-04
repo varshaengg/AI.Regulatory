@@ -355,6 +355,7 @@ Each module below maps 1:1 to a BRD module (§20).
   - `AddMicrosoftIdentityWebApp` — server-side auth-code + PKCE flow with Entra ID
   - `AddMicrosoftIdentityWebApi` — validates JWTs on `/api/*`
   - `AddSessionTokenCaches()` — access + refresh tokens stored server-side (in-memory for single-instance dev; distributed cache — Azure Cache for Redis — for multi-instance prod, see §3.1)
+  - `IClaimsTransformation` (`DbRoleClaimsTransformation`) — enriches `ClaimsPrincipal` on every authenticated API request by resolving caller `oid` in `AppUser` + `UserPersona` and projecting personas to policy roles (`admin`, `raLead`, `raAuthor`, `raReviewer`). This keeps DB user administration as the source of truth for authorization and removes per-user Entra app-role assignment overhead.
 
 - **Session cookie**
   - Name: `aspnet.ara.session`
@@ -383,7 +384,7 @@ Each module below maps 1:1 to a BRD module (§20).
 **Server — API authorisation**
 
 - Downstream `/api/*` calls carry the cookie; BFF middleware translates cookie → in-memory access token from token cache → attaches `Authorization: Bearer` to internal handlers
-- `[Authorize(Policy = "RegulatoryExecutive")]` policies bind to App Roles emitted in the `roles` claim (see §11 BYOC: App Roles are tenant-agnostic)
+- `[Authorize(Policy = ...)]` policies evaluate role claims after claim enrichment. Role values come from DB personas (plus `Admin:BootstrapOids` emergency bootstrap), not from manual Entra app-role assignment per user.
 - `Sites.Read.All`, `Files.Read.All` for downstream Graph / SharePoint Online access via **On-Behalf-Of** flow (`AcquireTokenOnBehalfOf`) using the cached user token
 
 **Configuration**

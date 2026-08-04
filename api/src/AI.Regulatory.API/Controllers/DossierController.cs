@@ -1,4 +1,5 @@
 using AI.Regulatory.API.Contracts;
+using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Data;
 using AI.Regulatory.API.Errors;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +10,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Reviewer comments per project — R1.</summary>
 [ApiController]
 [Route("api/v1/projects/{projectId}/comments")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.ReviewerScope)]
 [Tags("Comments (M2)")]
 [Produces("application/json")]
 public sealed class CommentsController : ControllerBase
@@ -26,7 +27,7 @@ public sealed class CommentsController : ControllerBase
 /// <summary>Dossier runs — L6.</summary>
 [ApiController]
 [Route("api/v1/runs")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
 [Tags("Runs (M4)")]
 [Produces("application/json")]
 public sealed class RunsController : ControllerBase
@@ -55,7 +56,7 @@ public sealed class RunsController : ControllerBase
 /// <summary>Compiled-dossier document tree — R1.</summary>
 [ApiController]
 [Route("api/v1/projects/{projectId}/doc-tree")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.ReviewerScope)]
 [Tags("Documents (M4)")]
 [Produces("application/json")]
 public sealed class DocTreeController : ControllerBase

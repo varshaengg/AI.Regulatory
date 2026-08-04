@@ -1,4 +1,5 @@
 using AI.Regulatory.API.Contracts;
+using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>CTD template catalog — A2/A3 admin screens.</summary>
 [ApiController]
 [Route("api/v1/templates")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.AdminOnly)]
 [Tags("Templates (M3)")]
 [Produces("application/json")]
 public sealed class TemplatesController : ControllerBase

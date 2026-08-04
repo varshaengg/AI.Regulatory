@@ -23,7 +23,7 @@
     "publisherAcrLoginServer":  { "value": "" },
     "imageTag":                 { "value": "" },
     "deployerObjectId":         { "value": "" },
-    "sqlLocation":              { "value": "centralus" },
+    "sqlLocation":              { "value": "centralindia" },
     "sqlAadAdminGroupObjectId": { "value": "18c43e1d-6f31-4e37-832f-a7c2b0bb5577" },
     "sqlAadAdminGroupName":     { "value": "varshass_live.com#EXT#@varshasslive.onmicrosoft.com" },
     "sqlAadAdminPrincipalType": { "value": "User" }

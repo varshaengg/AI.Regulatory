@@ -1,4 +1,5 @@
 using AI.Regulatory.API.Contracts;
+using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Per-project source configuration — A4.</summary>
 [ApiController]
 [Route("api/v1/projects/{projectId}/sources")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
 [Tags("Project sources")]
 [Produces("application/json")]
 public sealed class ProjectSourcesController : ControllerBase
@@ -25,7 +26,7 @@ public sealed class ProjectSourcesController : ControllerBase
 /// <summary>CTD module catalog + sub-module coverage — L4.</summary>
 [ApiController]
 [Route("api/v1/modules")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
 [Tags("CTD modules")]
 [Produces("application/json")]
 public sealed class ModulesController : ControllerBase

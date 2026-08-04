@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Contracts;
 using AI.Regulatory.API.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +10,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>App users + their personas — A5.</summary>
 [ApiController]
 [Route("api/v1/users")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.AdminOnly)]
 [Tags("Users (A5)")]
 [Produces("application/json")]
 public sealed class UsersController : ControllerBase

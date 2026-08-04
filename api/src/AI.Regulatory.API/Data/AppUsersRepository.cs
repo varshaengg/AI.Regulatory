@@ -182,6 +182,23 @@ public sealed class AppUsersRepository : BaseRepository<AppUser>
         return list.SingleOrDefault();
     }
 
+    // ─── Private DTOs (Dapper does not support ValueTuple as a result type) ───
+
+    private sealed class UserRow
+    {
+        public int Id { get; init; }
+        public Guid AadObjectId { get; init; }
+        public string DisplayName { get; init; } = string.Empty;
+        public string? Email { get; init; }
+        public DateTime CreatedUtc { get; init; }
+    }
+
+    private sealed class PersonaRow
+    {
+        public int UserId { get; init; }
+        public string Code { get; init; } = string.Empty;
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private static async Task<IReadOnlyList<AppUser>> ReadUsers(
@@ -194,7 +211,7 @@ public sealed class AppUsersRepository : BaseRepository<AppUser>
             WHERE  {whereClause}
             ORDER BY u.[DisplayName];";
 
-        var users = (await c.QueryAsync<(int Id, Guid AadObjectId, string DisplayName, string? Email, DateTime CreatedUtc)>(
+        var users = (await c.QueryAsync<UserRow>(
             new CommandDefinition(userSql, parameters, tx, cancellationToken: ct))).ToList();
         if (users.Count == 0) return Array.Empty<AppUser>();
 
@@ -205,7 +222,7 @@ public sealed class AppUsersRepository : BaseRepository<AppUser>
             JOIN   [dbo].[Persona]     p  ON p.[Id] = up.[PersonaId]
             WHERE  up.[UserId] IN @ids
             ORDER BY p.[Code];";
-        var personaRows = await c.QueryAsync<(int UserId, string Code)>(
+        var personaRows = await c.QueryAsync<PersonaRow>(
             new CommandDefinition(PersonaSql, new { ids }, tx, cancellationToken: ct));
 
         var personaMap = personaRows

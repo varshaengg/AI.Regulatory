@@ -10,9 +10,9 @@ import {
 import { AppBar } from "../layout/AppBar";
 import { NavRail } from "../layout/NavRail";
 import { useIsMobile } from "../layout/useIsMobile";
-import { C, screenConfig } from "../design/tokens";
+import { C, navGroups, screenConfig } from "../design/tokens";
 import { RequireAuth } from "../auth/RequireAuth";
-import { PermissionsProvider } from "../api/usePermissions";
+import { PermissionsProvider, usePermissions } from "../api/usePermissions";
 
 // ─── Lazy-loaded screens ──────────────────────────────────────────────────────
 const screenLoaders: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
@@ -33,6 +33,26 @@ const screenLoaders: Record<string, React.LazyExoticComponent<React.ComponentTyp
   R1: lazy(() => import("../screens/R1")),
   R2: lazy(() => import("../screens/R2")),
 };
+
+function requiredFeatureForScreen(screenId: string): string | undefined {
+  for (const group of navGroups) {
+    for (const item of group.items) {
+      if (item.id === screenId) return item.featureCode ?? group.featureCode;
+    }
+  }
+  return undefined;
+}
+
+function firstAllowedScreenId(hasAny: (featureCode: string) => boolean): string {
+  for (const group of navGroups) {
+    if (group.featureCode && !hasAny(group.featureCode)) continue;
+    for (const item of group.items) {
+      const feature = item.featureCode ?? group.featureCode;
+      if (!feature || hasAny(feature)) return item.id;
+    }
+  }
+  return "A1";
+}
 
 // ─── Layout shell (header + nav rail + screen outlet) ─────────────────────────
 function Shell() {
@@ -125,7 +145,23 @@ function ScreenRoute() {
   const params = useParams<{ id: string }>();
   const id = params.id ?? "A1";
   const Screen = screenLoaders[id];
+  const perms = usePermissions();
+
   if (!Screen) return <Navigate to="/screen/A1" replace />;
+  if (perms.status !== "ready") {
+    return (
+      <div style={{ padding: 24, color: C.text3, fontSize: 13 }}>
+        Loading permissions…
+      </div>
+    );
+  }
+
+  const requiredFeature = requiredFeatureForScreen(id);
+  if (requiredFeature && !perms.hasAny(requiredFeature)) {
+    const fallback = firstAllowedScreenId((feature) => perms.hasAny(feature));
+    return <Navigate to={`/screen/${fallback}`} replace />;
+  }
+
   return <Screen />;
 }
 

@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Data;
 using AI.Regulatory.API.Errors;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
@@ -48,6 +49,7 @@ builder.Services.AddSingleton<PermissionsRepository>();
 builder.Services.AddSingleton<PermissionMatrixRepository>();
 builder.Services.AddSingleton<AppUsersRepository>();
 builder.Services.AddSingleton<AadPeopleRepository>();
+builder.Services.AddTransient<IClaimsTransformation, DbRoleClaimsTransformation>();
 
 // Forwarded headers (App Service / reverse proxy sets X-Forwarded-Proto/For)
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -88,6 +90,8 @@ else
 
 builder.Services.AddAuthorization(options =>
 {
+    // Roles are enriched from AppUsers/Persona data on each request by
+    // DbRoleClaimsTransformation, so policy checks use DB-managed access.
     options.AddPolicy(AuthPolicies.AdminOnly,     p => p.RequireRole("admin"));
     options.AddPolicy(AuthPolicies.RaLeadOrAdmin, p => p.RequireRole("raLead", "admin"));
     options.AddPolicy(AuthPolicies.AuthorScope,   p => p.RequireRole("raAuthor", "raLead", "admin"));
@@ -180,4 +184,3 @@ if (!string.IsNullOrWhiteSpace(webAppPublicUrl))
 app.Run();
 
 public partial class Program;
-

@@ -14,7 +14,7 @@ namespace AI.Regulatory.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/projects")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
 [Tags("Projects (M2)")]
 [Produces("application/json")]
 public sealed class ProjectsController : ControllerBase

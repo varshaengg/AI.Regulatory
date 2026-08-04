@@ -1,4 +1,5 @@
 using AI.Regulatory.API.Contracts;
+using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Admin overview — A1.</summary>
 [ApiController]
 [Route("api/v1/admin")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.AdminOnly)]
 [Tags("Admin")]
 [Produces("application/json")]
 public sealed class AdminController : ControllerBase

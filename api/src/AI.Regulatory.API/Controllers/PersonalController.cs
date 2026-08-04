@@ -1,4 +1,5 @@
 using AI.Regulatory.API.Contracts;
+using AI.Regulatory.API.Auth;
 using AI.Regulatory.API.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Author assignments — U1.</summary>
 [ApiController]
 [Route("api/v1/me/assignments")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.AuthorScope)]
 [Tags("Assignments (M2)")]
 [Produces("application/json")]
 public sealed class AssignmentsController : ControllerBase
@@ -25,7 +26,7 @@ public sealed class AssignmentsController : ControllerBase
 /// <summary>User notifications — L1.</summary>
 [ApiController]
 [Route("api/v1/me/notifications")]
-[Authorize]
+[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
 [Tags("Notifications")]
 [Produces("application/json")]
 public sealed class NotificationsController : ControllerBase
