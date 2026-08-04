@@ -43,12 +43,29 @@ function requiredFeatureForScreen(screenId: string): string | undefined {
   return undefined;
 }
 
-function firstAllowedScreenId(hasAny: (featureCode: string) => boolean): string {
+function requiredVerbForScreen(screenId: string): "Read" | "Write" | "Review" | "Admin" | undefined {
+  for (const group of navGroups) {
+    for (const item of group.items) {
+      if (item.id === screenId) return item.requiredVerb;
+    }
+  }
+  return undefined;
+}
+
+function firstAllowedScreenId(
+  hasAny: (featureCode: string) => boolean,
+  hasPermission: (featureCode: string, verb: "Read" | "Write" | "Review" | "Admin") => boolean,
+): string {
   for (const group of navGroups) {
     if (group.featureCode && !hasAny(group.featureCode)) continue;
     for (const item of group.items) {
       const feature = item.featureCode ?? group.featureCode;
-      if (!feature || hasAny(feature)) return item.id;
+      if (!feature) return item.id;
+      if (item.requiredVerb) {
+        if (hasPermission(feature, item.requiredVerb)) return item.id;
+        continue;
+      }
+      if (hasAny(feature)) return item.id;
     }
   }
   return "A1";
@@ -157,8 +174,17 @@ function ScreenRoute() {
   }
 
   const requiredFeature = requiredFeatureForScreen(id);
-  if (requiredFeature && !perms.hasAny(requiredFeature)) {
-    const fallback = firstAllowedScreenId((feature) => perms.hasAny(feature));
+  const requiredVerb = requiredVerbForScreen(id);
+  const allowed = requiredFeature
+    ? (requiredVerb
+      ? perms.hasPermission(requiredFeature, requiredVerb)
+      : perms.hasAny(requiredFeature))
+    : true;
+  if (!allowed) {
+    const fallback = firstAllowedScreenId(
+      (feature) => perms.hasAny(feature),
+      (feature, verb) => perms.hasPermission(feature, verb),
+    );
     return <Navigate to={`/screen/${fallback}`} replace />;
   }
 

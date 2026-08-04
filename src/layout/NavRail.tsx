@@ -6,7 +6,7 @@ import { C, navGroups } from "../design/tokens";
 import { usePermissions } from "../api/usePermissions";
 
 export function NavRail({ activeScreen, style }: { activeScreen: string; style?: React.CSSProperties }) {
-  const { status, hasAny } = usePermissions();
+  const { status, hasAny, hasPermission } = usePermissions();
   // While permissions are loading we render the full nav (skeleton-y) so the
   // page doesn't flash empty. On error we also fall open — the API itself
   // still enforces access; the nav is only a UX hint.
@@ -14,13 +14,16 @@ export function NavRail({ activeScreen, style }: { activeScreen: string; style?:
     if (status !== "ready") return navGroups;
     return navGroups
       .map((g) => {
-        const items = g.items.filter((it) =>
-          it.featureCode ? hasAny(it.featureCode) : true);
+        const items = g.items.filter((it) => {
+          if (!it.featureCode) return true;
+          if (it.requiredVerb) return hasPermission(it.featureCode, it.requiredVerb);
+          return hasAny(it.featureCode);
+        });
         return { ...g, items };
       })
       .filter((g) => g.items.length > 0
                   && (!g.featureCode || hasAny(g.featureCode)));
-  }, [status, hasAny]);
+  }, [status, hasAny, hasPermission]);
 
   return (
     <div style={{

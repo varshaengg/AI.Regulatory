@@ -58,14 +58,20 @@ export const navGroups: {
    * `Read` on this feature see the whole group hidden. `undefined` = always show.
    */
   featureCode?: string;
-  items: { id: string; label: string; star?: 1 | 2; featureCode?: string }[];
+  items: {
+    id: string;
+    label: string;
+    star?: 1 | 2;
+    featureCode?: string;
+    requiredVerb?: "Read" | "Write" | "Review" | "Admin";
+  }[];
 }[] = [
   { label: "Admin", featureCode: undefined, items: [
-    { id: "A1", label: "Admin home" },
-    { id: "A2", label: "CTD templates", featureCode: "Templates" },
-    { id: "A3", label: "Upload template", featureCode: "Templates" },
-    { id: "A5", label: "User management", featureCode: "UserManagement" },
-    { id: "A6", label: "Permission matrix", featureCode: "UserManagement" },
+    { id: "A1", label: "Admin home", featureCode: "UserManagement", requiredVerb: "Admin" },
+    { id: "A2", label: "CTD templates", featureCode: "Templates", requiredVerb: "Admin" },
+    { id: "A3", label: "Upload template", featureCode: "Templates", requiredVerb: "Admin" },
+    { id: "A5", label: "User management", featureCode: "UserManagement", requiredVerb: "Admin" },
+    { id: "A6", label: "Permission matrix", featureCode: "UserManagement", requiredVerb: "Admin" },
   ]},
   { label: "RA Lead", featureCode: "DossierManagement", items: [
     { id: "L1", label: "Home dashboard" },
