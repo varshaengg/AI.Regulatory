@@ -30,6 +30,14 @@ parameters:
     type: string
     default: 'dev'
     values: [ dev, test, uat, prod ]
+  - name: deployApi
+    displayName: 'Deploy API'
+    type: boolean
+    default: true
+  - name: deployWeb
+    displayName: 'Deploy Web (SPA)'
+    type: boolean
+    default: true
 
 variables:
   - group: ara-deploy
@@ -46,6 +54,7 @@ stages:
   jobs:
     - job: BuildApi
       displayName: 'Build & publish API'
+      condition: eq('${{ parameters.deployApi }}', true)
       pool: { vmImage: 'ubuntu-latest' }
       steps:
         - task: UseDotNet@2
@@ -65,6 +74,7 @@ stages:
 
     - job: BuildWeb
       displayName: 'Build SPA'
+      condition: eq('${{ parameters.deployWeb }}', true)
       pool: { vmImage: 'ubuntu-latest' }
       steps:
         - task: NodeTool@0
@@ -109,8 +119,10 @@ stages:
               - checkout: self
               - download: current
                 artifact: api-package
+                condition: eq('${{ parameters.deployApi }}', true)
               - download: current
                 artifact: web-package
+                condition: eq('${{ parameters.deployWeb }}', true)
 
               - task: AzureCLI@2
                 name: lookup
@@ -169,7 +181,7 @@ stages:
               # ---- API zip deploy: prod slot for dev (B1 has no slots), staging slot otherwise
               - task: AzureWebApp@1
                 displayName: 'Deploy API zip (production slot — dev)'
-                condition: and(succeeded(), eq('${{ parameters.targetEnv }}', 'dev'))
+                condition: and(succeeded(), eq('${{ parameters.deployApi }}', true), eq('${{ parameters.targetEnv }}', 'dev'))
                 inputs:
                   azureSubscription: $(azureSubscription)
                   appType: 'webAppLinux'
@@ -180,7 +192,7 @@ stages:
 
               - task: AzureWebApp@1
                 displayName: 'Deploy API zip (staging slot — non-dev)'
-                condition: and(succeeded(), ne('${{ parameters.targetEnv }}', 'dev'))
+                condition: and(succeeded(), eq('${{ parameters.deployApi }}', true), ne('${{ parameters.targetEnv }}', 'dev'))
                 inputs:
                   azureSubscription: $(azureSubscription)
                   appType: 'webAppLinux'
@@ -193,6 +205,7 @@ stages:
 
               - task: AzureWebApp@1
                 displayName: 'Deploy Web zip -> $(lookup.webAppName)'
+                condition: and(succeeded(), eq('${{ parameters.deployWeb }}', true))
                 inputs:
                   azureSubscription: $(azureSubscription)
                   appType: 'webAppLinux'
@@ -207,7 +220,7 @@ stages:
 
               - task: AzureCLI@2
                 displayName: 'Blue/Green slot swap (non-dev)'
-                condition: and(succeeded(), ne('${{ parameters.targetEnv }}', 'dev'))
+                condition: and(succeeded(), eq('${{ parameters.deployApi }}', true), ne('${{ parameters.targetEnv }}', 'dev'))
                 inputs:
                   azureSubscription: $(azureSubscription)
                   scriptType: bash

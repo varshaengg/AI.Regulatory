@@ -1,0 +1,145 @@
+# =============================================================================
+# ARA — API-only deployment pipeline (Azure DevOps)
+# Builds and deploys the .NET API app service only.
+# Use this when only API code has changed to avoid rebuilding and redeploying
+# the SPA unnecessarily.
+# =============================================================================
+name: ARA-API-$(Date:yyyyMMdd)$(Rev:.rr)
+
+trigger:
+  branches:
+    include: [ main ]
+  paths:
+    include:
+      - api/**
+      - deploy/config/appsettings.api.code.*.json
+      - deploy/scripts/apply-appsettings.ps1
+      - deploy/pipelines/deploy-api.ado.yml
+
+parameters:
+  - name: targetEnv
+    displayName: 'Target environment'
+    type: string
+    default: 'dev'
+    values: [ dev, test, uat, prod ]
+
+variables:
+  - group: ara-deploy
+  - name: apiPublishDir
+    value: '$(Build.ArtifactStagingDirectory)/api'
+
+stages:
+# ---------------------------------------------------------------------------
+# 1. Build API
+# ---------------------------------------------------------------------------
+- stage: BuildApi
+  displayName: 'Build API'
+  jobs:
+    - job: BuildApi
+      displayName: 'dotnet publish'
+      pool: { vmImage: 'ubuntu-latest' }
+      steps:
+        - task: UseDotNet@2
+          inputs: { packageType: 'sdk', version: '8.0.x' }
+        - script: |
+            dotnet publish api/src/AI.Regulatory.API/AI.Regulatory.API.csproj \
+              -c Release -o "$(apiPublishDir)"
+          displayName: 'dotnet publish'
+        - task: ArchiveFiles@2
+          inputs:
+            rootFolderOrFile: '$(apiPublishDir)'
+            includeRootFolder: false
+            archiveType: 'zip'
+            archiveFile: '$(Build.ArtifactStagingDirectory)/api.zip'
+        - publish: '$(Build.ArtifactStagingDirectory)/api.zip'
+          artifact: api-package
+
+# ---------------------------------------------------------------------------
+# 2. Deploy API
+# ---------------------------------------------------------------------------
+- stage: DeployApi
+  displayName: 'Deploy API'
+  dependsOn: BuildApi
+  jobs:
+    - deployment: DeployApi
+      displayName: 'Deploy API to ara-${{ parameters.targetEnv }}'
+      environment: 'ara-${{ parameters.targetEnv }}'
+      pool: { vmImage: 'ubuntu-latest' }
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - checkout: self
+              - download: current
+                artifact: api-package
+
+              - task: AzureCLI@2
+                name: lookup
+                displayName: 'Resolve resource names from latest infra deployment'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    set -e
+                    LATEST=$(az deployment sub list \
+                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" \
+                      -o tsv)
+                    if [ -z "$LATEST" ]; then
+                      echo "ERROR: no sub-scope deployment named 'ara-${{ parameters.targetEnv }}-*' found. Run the infra pipeline first."
+                      exit 1
+                    fi
+                    RG=$(az deployment sub show --name "$LATEST" --query "properties.outputs.resourceGroupName.value" -o tsv)
+                    NP=$(az deployment sub show --name "$LATEST" --query "properties.outputs.namePrefix.value" -o tsv)
+                    echo "##vso[task.setvariable variable=rgName;isOutput=true]$RG"
+                    echo "##vso[task.setvariable variable=apiAppName;isOutput=true]app-$NP-api"
+
+              - task: AzureCLI@2
+                displayName: 'Apply code-owned API app settings'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    & "$(Build.SourcesDirectory)/deploy/scripts/apply-appsettings.ps1" `
+                      -ResourceGroup "$(lookup.rgName)" `
+                      -AppName       "$(lookup.apiAppName)" `
+                      -EnvName       "${{ parameters.targetEnv }}" `
+                      -App           "api"
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy API zip (production slot — dev)'
+                condition: and(succeeded(), eq('${{ parameters.targetEnv }}', 'dev'))
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  appType: 'webAppLinux'
+                  appName: '$(lookup.apiAppName)'
+                  resourceGroupName: '$(lookup.rgName)'
+                  package: '$(Pipeline.Workspace)/api-package/api.zip'
+                  deploymentMethod: 'zipDeploy'
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy API zip (staging slot — non-dev)'
+                condition: and(succeeded(), ne('${{ parameters.targetEnv }}', 'dev'))
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  appType: 'webAppLinux'
+                  appName: '$(lookup.apiAppName)'
+                  resourceGroupName: '$(lookup.rgName)'
+                  package: '$(Pipeline.Workspace)/api-package/api.zip'
+                  deploymentMethod: 'zipDeploy'
+                  deployToSlotOrASE: true
+                  slotName: 'staging'
+
+              - task: AzureCLI@2
+                displayName: 'Blue/Green slot swap (non-dev)'
+                condition: and(succeeded(), ne('${{ parameters.targetEnv }}', 'dev'))
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    az webapp deployment slot swap \
+                      --resource-group "$(lookup.rgName)" \
+                      --name "$(lookup.apiAppName)" \
+                      --slot staging --target-slot production

@@ -1,0 +1,115 @@
+# =============================================================================
+# ARA — Web/SPA-only deployment (GitHub Actions)
+# Builds and deploys the Vite/React SPA app service only.
+# =============================================================================
+name: ARA Deploy Web
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        default: dev
+        options: [ dev, test, uat, prod ]
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'deploy/config/spa.*.env'
+      - '.github/workflows/deploy-web.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-web:
+    name: Build SPA
+    runs-on: ubuntu-latest
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: npm ci + build (with per-env VITE_* config)
+        run: |
+          set -e
+          npm ci
+          CFG="deploy/config/spa.${TARGET_ENV}.env"
+          if [ -f "$CFG" ]; then
+            echo "Sourcing $CFG"
+            set -a; . "$CFG"; set +a
+          else
+            echo "WARNING: $CFG not found — building with no VITE_* overrides."
+          fi
+          npm run build
+      - name: Zip dist/
+        run: |
+          cd dist
+          zip -r ${{ runner.temp }}/web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-package
+          path: ${{ runner.temp }}/web.zip
+
+  deploy-web:
+    name: Deploy Web
+    runs-on: ubuntu-latest
+    needs: build-web
+    environment: ara-${{ inputs.environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: web-package, path: ./artifacts }
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve resource names from latest infra deployment
+        id: lookup
+        run: |
+          set -e
+          LATEST=$(az deployment sub list \
+            --query "sort_by([?starts_with(name, 'ara-${TARGET_ENV}-')], &properties.timestamp)[-1].name" \
+            -o tsv || true)
+          if [ -z "$LATEST" ]; then
+            RG="${{ secrets.AZURE_RESOURCE_GROUP_NAME }}"
+            WEB_NAME="${{ secrets.AZURE_WEB_APP_NAME }}"
+            [ -z "$RG" ] || [ -z "$WEB_NAME" ] && echo "ERROR: Missing infra and fallback secrets." && exit 1
+            echo "rg=$RG"          >> $GITHUB_OUTPUT
+            echo "web=$WEB_NAME"   >> $GITHUB_OUTPUT
+          else
+            RG=$(az deployment sub show --name "$LATEST" --query "properties.outputs.resourceGroupName.value" -o tsv)
+            NP=$(az deployment sub show --name "$LATEST" --query "properties.outputs.namePrefix.value" -o tsv)
+            echo "rg=$RG"          >> $GITHUB_OUTPUT
+            echo "web=app-$NP-web" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply code-owned Web app settings (if present)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          ./deploy/scripts/apply-appsettings.ps1 `
+            -ResourceGroup '${{ steps.lookup.outputs.rg }}' `
+            -AppName       '${{ steps.lookup.outputs.web }}' `
+            -EnvName       '${{ env.TARGET_ENV }}' `
+            -App           'web'
+
+      - name: Deploy Web zip
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name:            ${{ steps.lookup.outputs.web }}
+          resource-group-name: ${{ steps.lookup.outputs.rg }}
+          package:             ./artifacts/web.zip

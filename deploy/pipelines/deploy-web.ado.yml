@@ -1,0 +1,134 @@
+# =============================================================================
+# ARA — Web/SPA-only deployment pipeline (Azure DevOps)
+# Builds and deploys the Vite/React SPA app service only.
+# Use this when only frontend code has changed to avoid a full API rebuild
+# and unnecessary staging slot swap.
+# =============================================================================
+name: ARA-Web-$(Date:yyyyMMdd)$(Rev:.rr)
+
+trigger:
+  branches:
+    include: [ main ]
+  paths:
+    include:
+      - src/**
+      - public/**
+      - index.html
+      - vite.config.ts
+      - tsconfig*.json
+      - package.json
+      - package-lock.json
+      - deploy/config/spa.*.env
+      - deploy/pipelines/deploy-web.ado.yml
+
+parameters:
+  - name: targetEnv
+    displayName: 'Target environment'
+    type: string
+    default: 'dev'
+    values: [ dev, test, uat, prod ]
+
+variables:
+  - group: ara-deploy
+  - name: webPublishDir
+    value: '$(Build.ArtifactStagingDirectory)/web'
+
+stages:
+# ---------------------------------------------------------------------------
+# 1. Build SPA
+# ---------------------------------------------------------------------------
+- stage: BuildWeb
+  displayName: 'Build SPA'
+  jobs:
+    - job: BuildWeb
+      displayName: 'npm ci + vite build'
+      pool: { vmImage: 'ubuntu-latest' }
+      steps:
+        - task: NodeTool@0
+          inputs: { versionSpec: '20.x' }
+        - script: |
+            set -e
+            npm ci
+            CFG="deploy/config/spa.${{ parameters.targetEnv }}.env"
+            if [ -f "$CFG" ]; then
+              echo "Sourcing $CFG"
+              set -a; . "$CFG"; set +a
+            else
+              echo "WARNING: $CFG not found — building with no VITE_* overrides."
+            fi
+            npm run build
+            mkdir -p "$(webPublishDir)"
+            cp -r dist/* "$(webPublishDir)/"
+          displayName: 'npm ci + npm run build (per-env VITE_* config)'
+        - task: ArchiveFiles@2
+          inputs:
+            rootFolderOrFile: '$(webPublishDir)'
+            includeRootFolder: false
+            archiveType: 'zip'
+            archiveFile: '$(Build.ArtifactStagingDirectory)/web.zip'
+        - publish: '$(Build.ArtifactStagingDirectory)/web.zip'
+          artifact: web-package
+
+# ---------------------------------------------------------------------------
+# 2. Deploy SPA
+# ---------------------------------------------------------------------------
+- stage: DeployWeb
+  displayName: 'Deploy Web'
+  dependsOn: BuildWeb
+  jobs:
+    - deployment: DeployWeb
+      displayName: 'Deploy Web to ara-${{ parameters.targetEnv }}'
+      environment: 'ara-${{ parameters.targetEnv }}'
+      pool: { vmImage: 'ubuntu-latest' }
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - checkout: self
+              - download: current
+                artifact: web-package
+
+              - task: AzureCLI@2
+                name: lookup
+                displayName: 'Resolve resource names from latest infra deployment'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    set -e
+                    LATEST=$(az deployment sub list \
+                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" \
+                      -o tsv)
+                    if [ -z "$LATEST" ]; then
+                      echo "ERROR: no sub-scope deployment named 'ara-${{ parameters.targetEnv }}-*' found. Run the infra pipeline first."
+                      exit 1
+                    fi
+                    RG=$(az deployment sub show --name "$LATEST" --query "properties.outputs.resourceGroupName.value" -o tsv)
+                    NP=$(az deployment sub show --name "$LATEST" --query "properties.outputs.namePrefix.value" -o tsv)
+                    echo "##vso[task.setvariable variable=rgName;isOutput=true]$RG"
+                    echo "##vso[task.setvariable variable=webAppName;isOutput=true]app-$NP-web"
+
+              - task: AzureCLI@2
+                displayName: 'Apply code-owned Web app settings (if present)'
+                continueOnError: true
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    & "$(Build.SourcesDirectory)/deploy/scripts/apply-appsettings.ps1" `
+                      -ResourceGroup "$(lookup.rgName)" `
+                      -AppName       "$(lookup.webAppName)" `
+                      -EnvName       "${{ parameters.targetEnv }}" `
+                      -App           "web"
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy Web zip -> $(lookup.webAppName)'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  appType: 'webAppLinux'
+                  appName: '$(lookup.webAppName)'
+                  resourceGroupName: '$(lookup.rgName)'
+                  package: '$(Pipeline.Workspace)/web-package/web.zip'
+                  deploymentMethod: 'zipDeploy'
