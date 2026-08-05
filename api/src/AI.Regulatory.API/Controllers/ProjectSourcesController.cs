@@ -9,7 +9,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Per-project source configuration — A4.</summary>
 [ApiController]
 [Route("api/v1/projects/{projectId}/sources")]
-[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
+[Authorize(Policy = AuthPolicies.DossierManagementRead)]
 [Tags("Project sources")]
 [Produces("application/json")]
 public sealed class ProjectSourcesController : ControllerBase
@@ -26,7 +26,7 @@ public sealed class ProjectSourcesController : ControllerBase
 /// <summary>CTD module catalog + sub-module coverage — L4.</summary>
 [ApiController]
 [Route("api/v1/modules")]
-[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
+[Authorize(Policy = AuthPolicies.DossierManagementRead)]
 [Tags("CTD modules")]
 [Produces("application/json")]
 public sealed class ModulesController : ControllerBase

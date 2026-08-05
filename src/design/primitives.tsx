@@ -4,8 +4,8 @@ import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { C, personas, screenConfig, type PersonaKey } from "./tokens";
 
 type BtnVariant = "primary" | "secondary" | "subtle" | "danger";
-export function Btn({ variant = "primary" as BtnVariant, children, onClick, style = {} }: {
-  variant?: BtnVariant; children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties;
+export function Btn({ variant = "primary" as BtnVariant, children, onClick, disabled = false, style = {} }: {
+  variant?: BtnVariant; children: React.ReactNode; onClick?: () => void; disabled?: boolean; style?: React.CSSProperties;
 }) {
   const base: React.CSSProperties = {
     display: "inline-flex", alignItems: "center", gap: "6px",
@@ -20,7 +20,17 @@ export function Btn({ variant = "primary" as BtnVariant, children, onClick, styl
     danger: { backgroundColor: C.danger, color: "white", borderColor: "transparent" },
   };
   return (
-    <button style={{ ...base, ...variants[variant], ...style }} onClick={onClick}>
+    <button
+      style={{
+        ...base,
+        ...variants[variant],
+        opacity: disabled ? 0.55 : 1,
+        cursor: disabled ? "not-allowed" : base.cursor,
+        ...style,
+      }}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+    >
       {children}
     </button>
   );

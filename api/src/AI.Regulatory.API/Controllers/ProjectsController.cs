@@ -14,7 +14,6 @@ namespace AI.Regulatory.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/projects")]
-[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
 [Tags("Projects (M2)")]
 [Produces("application/json")]
 public sealed class ProjectsController : ControllerBase
@@ -24,6 +23,7 @@ public sealed class ProjectsController : ControllerBase
     public ProjectsController(ProjectsRepository projects) => _projects = projects;
 
     [HttpGet(Name = "ListProjects")]
+    [Authorize(Policy = AuthPolicies.DossierManagementRead)]
     [ProducesResponseType(typeof(Page<ProjectSummary>), StatusCodes.Status200OK)]
     public async Task<ActionResult<Page<ProjectSummary>>> List(
         [FromQuery] int? pageSize,
@@ -42,6 +42,7 @@ public sealed class ProjectsController : ControllerBase
     }
 
     [HttpGet("{id}", Name = "GetProject")]
+    [Authorize(Policy = AuthPolicies.DossierManagementRead)]
     [ProducesResponseType(typeof(ProjectDetail), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProjectDetail>> Get(string id, CancellationToken ct)
@@ -59,7 +60,7 @@ public sealed class ProjectsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
+    [Authorize(Policy = AuthPolicies.DossierManagementWrite)]
     [ProducesResponseType(typeof(ProjectDetail), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

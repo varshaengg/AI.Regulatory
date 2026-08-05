@@ -10,7 +10,7 @@ namespace AI.Regulatory.API.Controllers;
 /// <summary>Reviewer comments per project — R1.</summary>
 [ApiController]
 [Route("api/v1/projects/{projectId}/comments")]
-[Authorize(Policy = AuthPolicies.ReviewerScope)]
+[Authorize(Policy = AuthPolicies.DossierManagementReview)]
 [Tags("Comments (M2)")]
 [Produces("application/json")]
 public sealed class CommentsController : ControllerBase
@@ -27,7 +27,7 @@ public sealed class CommentsController : ControllerBase
 /// <summary>Dossier runs — L6.</summary>
 [ApiController]
 [Route("api/v1/runs")]
-[Authorize(Policy = AuthPolicies.RaLeadOrAdmin)]
+[Authorize(Policy = AuthPolicies.DossierManagementRead)]
 [Tags("Runs (M4)")]
 [Produces("application/json")]
 public sealed class RunsController : ControllerBase
@@ -56,7 +56,7 @@ public sealed class RunsController : ControllerBase
 /// <summary>Compiled-dossier document tree — R1.</summary>
 [ApiController]
 [Route("api/v1/projects/{projectId}/doc-tree")]
-[Authorize(Policy = AuthPolicies.ReviewerScope)]
+[Authorize(Policy = AuthPolicies.DossierManagementReview)]
 [Tags("Documents (M4)")]
 [Produces("application/json")]
 public sealed class DocTreeController : ControllerBase

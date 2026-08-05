@@ -355,7 +355,7 @@ Each module below maps 1:1 to a BRD module (§20).
   - `AddMicrosoftIdentityWebApp` — server-side auth-code + PKCE flow with Entra ID
   - `AddMicrosoftIdentityWebApi` — validates JWTs on `/api/*`
   - `AddSessionTokenCaches()` — access + refresh tokens stored server-side (in-memory for single-instance dev; distributed cache — Azure Cache for Redis — for multi-instance prod, see §3.1)
-  - `IClaimsTransformation` (`DbRoleClaimsTransformation`) — enriches `ClaimsPrincipal` on every authenticated API request by resolving caller `oid` in `AppUser` + `UserPersona` and projecting personas to policy roles (`admin`, `raLead`, `raAuthor`, `raReviewer`). This keeps DB user administration as the source of truth for authorization and removes per-user Entra app-role assignment overhead.
+  - `IClaimsTransformation` (`DbRoleClaimsTransformation`) — enriches `ClaimsPrincipal` on every authenticated API request by resolving caller `oid` in `AppUser` + `UserPersona` and projecting personas to policy roles (`admin`, `raLead`, `raAuthor`, `raReviewer`) plus effective feature permissions (`ara_perm` claims such as `DossierManagement:Read`). This keeps DB user administration as the source of truth for authorization and removes per-user Entra app-role assignment overhead.
 
 - **Session cookie**
   - Name: `aspnet.ara.session`
@@ -526,6 +526,7 @@ The post-deploy script:
 
 - **A5 · User Management** — user table with persona chips, filter by persona / free-text search, Add user (opens people-picker dialog), Edit personas (multi-select), Remove.
 - **A6 · Permission Matrix** — personas as rows, feature × verb as column groups, checkboxes are optimistically toggled and PUT one at a time. Cells implied by an `Admin` grant on the same (persona, feature) are shown checked but disabled.
+- **Dossier lifecycle** — `DossierManagement` is permission-driven in the same matrix model: `Read` covers L1/L2/L6 browse views, `Write` covers L3/L4 authoring/configuration, and `Review` covers reviewer surfaces. Screen and API gating must use the same feature/verb pair so the nav never exposes a route that the API would 403.
 
 **People-picker (A5 add-user dialog)**:
 - Debounced 250 ms search against `GET /api/v1/aad/people?search=`.
@@ -582,6 +583,8 @@ sequenceDiagram
 ### 4.2 Module 2 — Project Management
 
 **Requirements**: FR-004 (create), FR-005 (edit), FR-006 (archive).
+
+**Permission model**: `DossierManagement` is the feature code for the project lifecycle. `Read` grants list/detail/run visibility, `Write` grants create/edit/source config/launch actions, `Review` is reserved for sign-off/reviewer-facing package inspection, and `Admin` is reserved for administrative overrides and archival.
 
 **Domain model**
 ```csharp

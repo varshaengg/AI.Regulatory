@@ -5,6 +5,7 @@ import { C } from "../design/tokens";
 import { Btn, Chip, Card, ScreenCaption } from "../design/primitives";
 import { listProjects, listNotifications } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
+import { usePermissions } from "../api/usePermissions";
 import type { UserNotification } from "../api/types";
 
 const FLAG: Record<string, string> = { DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", NL: "🇳🇱", UK: "🇬🇧", GB: "🇬🇧", US: "🇺🇸" };
@@ -39,6 +40,8 @@ export default function L1Screen() {
   const th: React.CSSProperties = { paddingBottom: 8, textAlign: "left", fontSize: 11, fontWeight: 600, color: C.text3, borderBottom: `1px solid ${C.border1}`, paddingRight: 12 };
   const td: React.CSSProperties = { padding: "10px 12px 10px 0", fontSize: 12 };
 
+  const perms = usePermissions();
+  const canWrite = perms.hasPermission("DossierManagement", "Write");
   const projects = useApi((s) => listProjects(50, undefined, s).then(p => p.items), []);
   const notifs   = useApi((s) => listNotifications(s), []);
 
@@ -56,7 +59,7 @@ export default function L1Screen() {
                 : "Loading projects…"}
           </p>
         </div>
-        <Btn variant="primary"><Plus size={13} />New dossier request</Btn>
+        <Btn variant="primary" disabled={!canWrite}><Plus size={13} />New dossier request</Btn>
       </div>
 
       <div style={{ display: "flex", gap: 16 }}>

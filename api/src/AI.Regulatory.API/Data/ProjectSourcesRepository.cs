@@ -1,4 +1,5 @@
 using AI.Regulatory.API.Contracts;
+using Dapper;
 using Microsoft.Extensions.Options;
 
 namespace AI.Regulatory.API.Data;
@@ -6,7 +7,10 @@ namespace AI.Regulatory.API.Data;
 /// <summary>Per-project source configuration — A4. Also feeds L5 module/source summary.</summary>
 public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
 {
-    public ProjectSourcesRepository(IOptions<DataOptions> options) : base(options) { }
+    private readonly ISqlConnectionFactory _sql;
+
+    public ProjectSourcesRepository(IOptions<DataOptions> options, ISqlConnectionFactory sql)
+        : base(options) => _sql = sql;
 
     protected override bool MatchesId(ProjectSource item, string id)
         => item.Id.ToString() == id;
@@ -31,6 +35,34 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
         new ProjectSource(6, "px-102-de", "M5", "Clinical trial data","contosopharma/px102/m5/ctr",          "Azure Blob",  D(-2, 16,40), "ok"),
         new ProjectSource(7, "px-102-de", "M5", "ISS / ISE reports",  "px102-sharepoint/clinical/iss",       "SharePoint",  D(-2, 14,10), "error"),
     };
+
+    protected override async Task<IReadOnlyList<ProjectSource>> ListFromStoreAsync(CancellationToken ct)
+    {
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.QueryAsync<ProjectSource>(new CommandDefinition(
+            """
+            SELECT [Id], [ProjectId], [ModuleId], [Label], [Path], [Type], [SyncedAt], [Status]
+            FROM [dbo].[ProjectSource]
+            ORDER BY [ProjectId], [ModuleId], [Id];
+            """,
+            cancellationToken: ct));
+        return rows.ToArray();
+    }
+
+    protected override async Task<ProjectSource?> GetFromStoreAsync(string id, CancellationToken ct)
+    {
+        if (!int.TryParse(id, out var intId))
+            return SeedList.FirstOrDefault(s => MatchesId(s, id));
+
+        await using var c = await _sql.OpenAsync(ct);
+        return await c.QuerySingleOrDefaultAsync<ProjectSource>(new CommandDefinition(
+            """
+            SELECT [Id], [ProjectId], [ModuleId], [Label], [Path], [Type], [SyncedAt], [Status]
+            FROM [dbo].[ProjectSource]
+            WHERE [Id] = @intId;
+            """,
+            new { intId }, cancellationToken: ct));
+    }
 
     private static DateTime D(int daysOffset, int h, int m)
         => DateTime.UtcNow.Date.AddDays(daysOffset).AddHours(h).AddMinutes(m);

@@ -121,6 +121,28 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AuthPolicies.TemplatesAdmin, p =>
         p.RequireAssertion(ctx =>
             ctx.User.IsInRole("admin") || HasPermission(ctx.User, "Templates", "Admin")));
+
+    options.AddPolicy(AuthPolicies.DossierManagementRead, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "DossierManagement", "Read")
+            || HasPermission(ctx.User, "DossierManagement", "Write")
+            || HasPermission(ctx.User, "DossierManagement", "Review")
+            || HasPermission(ctx.User, "DossierManagement", "Admin")));
+    options.AddPolicy(AuthPolicies.DossierManagementWrite, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "DossierManagement", "Write")
+            || HasPermission(ctx.User, "DossierManagement", "Admin")));
+    options.AddPolicy(AuthPolicies.DossierManagementReview, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "DossierManagement", "Review")
+            || HasPermission(ctx.User, "DossierManagement", "Admin")));
+    options.AddPolicy(AuthPolicies.DossierManagementAdmin, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "DossierManagement", "Admin")));
     options.AddPolicy(AuthPolicies.RaLeadOrAdmin, p => p.RequireRole("raLead", "admin"));
     options.AddPolicy(AuthPolicies.AuthorScope,   p => p.RequireRole("raAuthor", "raLead", "admin"));
     options.AddPolicy(AuthPolicies.ReviewerScope, p => p.RequireRole("raReviewer", "raLead", "admin"));

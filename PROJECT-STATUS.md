@@ -93,6 +93,7 @@
 - **Templates API**: Versioning, validation, inheritance
 - **Sources API**: Multi-source aggregation, unified search
 - **Runs API**: Async compilation, progress streaming, output artifacts
+- **Story 6 start**: project lifecycle now moves to `DossierManagement` feature verbs (`Read`/`Write`/`Review`) with SQL schema scaffolding for `Project`, `ProjectSource`, `DossierRun`, and `DossierRunEvent`.
 
 ### Testing
 - **Unit Tests**: Dapper repositories, business logic
@@ -110,6 +111,55 @@
 - Automatically assigns Admin persona on SQL deployment
 - Idempotent MERGE + INSERT prevents duplicates on re-runs
 - **Impact**: Eliminates manual bootstrap for development; ready for next deploy cycle
+
+---
+
+## 📘 User Story 6 — Build project lifecycle APIs and screens
+
+### Related docs
+- [SDD — Project lifecycle](docs/SDD.md)
+- [Story technical details](docs/API-Design.md)
+- [ADO work item #6](https://dev.azure.com/uc-solutions/AI-Solutions/_workitems/edit/6)
+
+### Goal
+Deliver the dossier/project lifecycle flow end-to-end: L1 dashboard, L2 project catalogue, L3 dossier basics, L4 module/source setup, L5 review/launch, and L6 run monitoring.
+
+### Technical approach
+- **Feature gate**: `DossierManagement` controls the lifecycle using matrix-derived `Read` / `Write` / `Review` / `Admin` verbs.
+- **Read**: project list, project detail, run status, source summary.
+- **Write**: create/edit dossier projects, configure sources, start discovery, launch runs.
+- **Review**: reviewer-facing package inspection and sign-off surfaces.
+- **Admin**: archive/override operations.
+
+### Data model
+- `Project` — tenant-scoped lifecycle root row.
+- `ProjectSource` — per-project module source configuration.
+- `DossierRun` — lifecycle run state, outputs, and status.
+- `DossierRunEvent` — audit/progress stream for runs.
+
+### API surface
+- `GET /api/v1/projects`
+- `POST /api/v1/projects`
+- `GET /api/v1/projects/{id}`
+- `GET /api/v1/projects/{id}/sources`
+- `POST /api/v1/projects/{id}/discovery`
+- `GET /api/v1/runs/{runId}`
+- `GET /api/v1/runs/{runId}/events`
+
+### UI surfaces
+- **L1** dashboard: project list + active run snapshots
+- **L2** catalogue: searchable project table
+- **L3** basics wizard: project metadata
+- **L4** module wizard: templates + source mapping
+- **L5** review/launch: summary before run
+- **L6** live run: progress, logs, agents
+
+### Current status
+- SQL schema scaffolded
+- API controllers gated by lifecycle permissions
+- Project repository moved to SQL-backed storage
+- L1/L2 now respect write permission for new dossier action
+- Remaining work: connect L3-L6 to live create/run actions and remove remaining demo-only state
 
 ---
 

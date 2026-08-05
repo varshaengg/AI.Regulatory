@@ -5,6 +5,7 @@ import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
 import { listProjects } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
+import { usePermissions } from "../api/usePermissions";
 
 const FLAG: Record<string, string> = { DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", NL: "🇳🇱", UK: "🇬🇧", GB: "🇬🇧", US: "🇺🇸" };
 
@@ -18,6 +19,8 @@ function statusChip(status: string): "brand" | "warning" | "danger" | "neutral" 
 }
 
 export default function L2Screen() {
+  const perms = usePermissions();
+  const canWrite = perms.hasPermission("DossierManagement", "Write");
   const projects = useApi((sig) => listProjects(200, undefined, sig).then(p => p.items), []);
 
   const th: React.CSSProperties = { padding: "8px 12px", textAlign: "left", fontWeight: 600, fontSize: 12, color: C.text2, borderBottom: `1px solid ${C.border1}`, backgroundColor: C.bg2 };
@@ -29,7 +32,7 @@ export default function L2Screen() {
       <Breadcrumb items={["Home", "Projects"]} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: C.text1 }}>Dossier projects</h1>
-        <Btn variant="primary"><Plus size={13} />New dossier request</Btn>
+        <Btn variant="primary" disabled={!canWrite}><Plus size={13} />New dossier request</Btn>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 4, border: `1px solid ${C.border1}`, backgroundColor: "white", fontSize: 13, color: C.text3 }}>

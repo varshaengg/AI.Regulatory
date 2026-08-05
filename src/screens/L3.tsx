@@ -1,49 +1,239 @@
 // Auto-split from src/app/App.tsx - screen L3.
 import * as React from "react";
-import { FileText, ArrowRight } from "lucide-react";
+import { ArrowRight, FileText } from "lucide-react";
 import { C } from "../design/tokens";
-import { Btn, Chip, Card, FInput, FSelect, Stepper, Breadcrumb, ScreenCaption } from "../design/primitives";
+import { Btn, Chip, Card, Stepper, ScreenCaption } from "../design/primitives";
+import { createProject, getProject } from "../api/resources";
+import { usePermissions } from "../api/usePermissions";
+import { ErrorBanner, LoadingLabel, useApi } from "../api/useApi";
+import type { ProjectDetail } from "../api/types";
+
+type FormState = {
+  name: string;
+  country: string;
+  product: string;
+  submissionType: "Initial" | "Variation" | "Renewal";
+  targetDate: string;
+  owner: string;
+};
+
+type CountryOption = { code: string; label: string };
+
+const COUNTRY_OPTIONS: CountryOption[] = [
+  { code: "DE", label: "🇩🇪 Germany (DE)" },
+  { code: "FR", label: "🇫🇷 France (FR)" },
+  { code: "IT", label: "🇮🇹 Italy (IT)" },
+  { code: "ES", label: "🇪🇸 Spain (ES)" },
+  { code: "NL", label: "🇳🇱 Netherlands (NL)" },
+  { code: "GB", label: "🇬🇧 United Kingdom (GB)" },
+];
+
+const TEMPLATE_ROWS = [
+  { id: "M1", label: "Administrative", version: "4.2", color: C.brand },
+  { id: "M2", label: "Summaries", version: "4.1", color: "#5C2E91" },
+  { id: "M3", label: "Quality", version: "4.2", color: C.success },
+  { id: "M4", label: "Nonclinical", version: "3.9", color: C.warn },
+  { id: "M5", label: "Clinical", version: "4.0", color: C.danger },
+];
+
+function countryLabel(code: string): string {
+  return COUNTRY_OPTIONS.find((item) => item.code === code)?.label ?? code;
+}
+
+function initialForm(project?: ProjectDetail | null): FormState {
+  return project
+    ? {
+        name: project.name,
+        country: project.country,
+        product: project.product,
+        submissionType: "Initial",
+        targetDate: "2026-03-31",
+        owner: project.ownerDisplayName,
+      }
+    : {
+        name: "PX-102 · Germany · Initial submission",
+        country: "DE",
+        product: "PX-102 — Elmiravir 50 mg",
+        submissionType: "Initial",
+        targetDate: "2026-03-31",
+        owner: "Marcus Lindqvist (you)",
+      };
+}
 
 export default function L3Screen() {
+  const perms = usePermissions();
+  const canWrite = perms.hasPermission("DossierManagement", "Write");
+  const [activeProjectId, setActiveProjectId] = React.useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("projectId"));
+
+  const project = useApi<ProjectDetail | null>(
+    (sig) => (activeProjectId ? getProject(activeProjectId, sig) : Promise.resolve(null)),
+    [activeProjectId],
+  );
+
+  const [form, setForm] = React.useState<FormState>(() => initialForm(null));
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [created, setCreated] = React.useState<ProjectDetail | null>(null);
+  const [hydratedProjectId, setHydratedProjectId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (project.status === "ready" && project.data && hydratedProjectId !== activeProjectId) {
+      setForm(initialForm(project.data));
+      setHydratedProjectId(activeProjectId);
+    }
+    if (!activeProjectId) {
+      setHydratedProjectId(null);
+    }
+  }, [activeProjectId, hydratedProjectId, project]);
+
+  const setField = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
+
+  const submit = async () => {
+    if (!canWrite || submitting) return;
+    if (!form.name.trim() || !form.country.trim()) {
+      setError("Project name and target country are required.");
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+    try {
+      const detail = await createProject({
+        name: form.name.trim(),
+        country: form.country,
+        product: form.product.trim() || undefined,
+      });
+      setCreated(detail);
+      setActiveProjectId(detail.id);
+      setHydratedProjectId(detail.id);
+      setForm(initialForm(detail));
+      window.history.replaceState({}, "", `${window.location.pathname}?projectId=${encodeURIComponent(detail.id)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create project.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const fieldStyle: React.CSSProperties = {
+    padding: "6px 10px",
+    borderRadius: 4,
+    border: `1px solid ${C.border1}`,
+    fontSize: 13,
+    color: C.text1,
+    backgroundColor: "white",
+    fontFamily: "inherit",
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <ScreenCaption id="L3" persona="RALead" />
       <div style={{ marginBottom: 24 }}><Stepper steps={["Basics", "Modules", "Review & Launch"]} active={0} /></div>
+
+      {error && <ErrorBanner message={error} style={{ marginBottom: 16 }} />}
+      {created && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 4, backgroundColor: C.successTint, color: C.success, fontSize: 12 }}>
+          Created {created.name} as {created.id}. You can continue with module setup and review.
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }}>
         <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: C.text1 }}>Project details</h3>
-          <FInput label="Project name" placeholder="PX-102 · Germany · Initial submission" />
-          <FSelect label="Product" value="PX-102 — Elmiravir 50 mg" />
-          <FInput label="Product version" placeholder="v2.1" />
-          <FSelect label="Target country" value="🇩🇪 Germany (DE) — Europe region" />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: C.text1 }}>Project details</h3>
+            {project.status === "loading" && <LoadingLabel>Loading existing project…</LoadingLabel>}
+            {project.status === "ready" && project.data && (
+              <Chip color="brand">Loaded from API · {project.data.id}</Chip>
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Project name</label>
+            <input
+              style={fieldStyle}
+              value={form.name}
+              onChange={(e) => setField("name", e.target.value)}
+              disabled={!canWrite || submitting}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Product</label>
+            <input
+              style={fieldStyle}
+              value={form.product}
+              onChange={(e) => setField("product", e.target.value)}
+              disabled={!canWrite || submitting}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Product version</label>
+            <input style={fieldStyle} value="v2.1" readOnly disabled />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Target country</label>
+            <select
+              style={fieldStyle}
+              value={form.country}
+              onChange={(e) => setField("country", e.target.value)}
+              disabled={!canWrite || submitting}
+            >
+              {COUNTRY_OPTIONS.map((opt) => (
+                <option key={opt.code} value={opt.code}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label style={{ fontSize: 12, fontWeight: 500, color: C.text2, display: "block", marginBottom: 8 }}>Submission type</label>
-            <div style={{ display: "flex", gap: 24 }}>
-              {["Initial","Variation","Renewal"].map((opt, i) => (
-                <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", color: C.text1 }}>
-                  <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${i === 0 ? C.brand : C.border2}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {i === 0 && <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: C.brand }} />}
-                  </div>
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              {(["Initial", "Variation", "Renewal"] as const).map((opt) => (
+                <label
+                  key={opt}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, fontSize: 13,
+                    cursor: canWrite && !submitting ? "pointer" : "not-allowed",
+                    color: C.text1, opacity: canWrite && !submitting ? 1 : 0.65,
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="submissionType"
+                    checked={form.submissionType === opt}
+                    onChange={() => setField("submissionType", opt)}
+                    disabled={!canWrite || submitting}
+                  />
                   {opt}
                 </label>
               ))}
             </div>
           </div>
-          <FInput label="Target submission date" placeholder="2026-03-31" />
-          <FInput label="Owner" placeholder="Marcus Lindqvist (you)" />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Target submission date</label>
+            <input
+              style={fieldStyle}
+              value={form.targetDate}
+              onChange={(e) => setField("targetDate", e.target.value)}
+              disabled={!canWrite || submitting}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Owner</label>
+            <input style={fieldStyle} value={form.owner} readOnly disabled />
+          </div>
         </Card>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card style={{ padding: 16 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text1, marginBottom: 12 }}>Templates assigned</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {[
-                { id: "M1", label: "Administrative", version: "4.2", color: C.brand },
-                { id: "M2", label: "Summaries", version: "4.1", color: "#5C2E91" },
-                { id: "M3", label: "Quality", version: "4.2", color: C.success },
-                { id: "M4", label: "Nonclinical", version: "3.9", color: C.warn },
-                { id: "M5", label: "Clinical", version: "4.0", color: C.danger },
-              ].map((m, i, arr) => (
+              {TEMPLATE_ROWS.map((m, i, arr) => (
                 <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.border1}` : "none" }}>
                   <div style={{ width: 24, height: 24, borderRadius: "50%", backgroundColor: m.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{m.id}</div>
                   <span style={{ flex: 1, fontSize: 12, color: C.text1 }}>{m.label}</span>
@@ -53,14 +243,30 @@ export default function L3Screen() {
               ))}
             </div>
           </Card>
+
+          <Card style={{ padding: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text1, marginBottom: 12 }}>Create request</h3>
+            <div style={{ fontSize: 12, color: C.text2, marginBottom: 12 }}>
+              This will create the lifecycle root record and hand off to module setup.
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Btn variant="primary" disabled={!canWrite || submitting} onClick={submit}>
+                <ArrowRight size={13} />
+                {submitting ? "Creating…" : "Create project"}
+              </Btn>
+              <Chip color={canWrite ? "brand" : "disabled"}>{canWrite ? "Write enabled" : "Read only"}</Chip>
+              {project.status === "ready" && project.data && (
+                <Chip color="success">{countryLabel(project.data.country)}</Chip>
+              )}
+            </div>
+          </Card>
         </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 24 }}>
-        <Btn variant="subtle">Cancel</Btn>
-        <Btn variant="primary">Next <ArrowRight size={13} /></Btn>
+        <Btn variant="subtle" disabled={!canWrite || submitting}>Cancel</Btn>
+        <Btn variant="secondary" disabled={!canWrite || submitting}>Save draft</Btn>
       </div>
     </div>
   );
 }
-

@@ -65,7 +65,8 @@ The SDD (ADR-020) specifies a BFF-cookie pattern as the target design. During th
 > **Interim (v0.x — matches the current SPA):**
 > - The SPA uses **MSAL Browser** (single-tenant `ucatalyst.onmicrosoft.com` in dev) and acquires an access token silently for the API's scope.
 > - The API validates the token as a **JWT Bearer** using `Microsoft.Identity.Web`, expecting audience = the API's client ID and issuer = the configured tenant.
-> - Roles come from Entra ID app-role claims (`admin`, `raLead`, `raAuthor`, `raReviewer`); permissions are enforced via `[Authorize(Roles = "...")]` and per-endpoint policies.
+> - Roles come from Entra ID app-role claims (`admin`, `raLead`, `raAuthor`, `raReviewer`), but business access is enforced via DB-derived permission claims. `DbRoleClaimsTransformation` enriches the caller with `ara_perm` claims of the form `feature:verb` (for example `DossierManagement:Read`).
+> - Controllers authorize against feature policies (`UserManagement*`, `Templates*`, `DossierManagement*`) so screen access and API access stay in lockstep with the permission matrix.
 >
 > **Target (v1.0 — matches ADR-020, deferred):**
 > - Browser holds only an **HttpOnly, SameSite=Strict, Secure cookie**; MSAL runs in the BFF process.
@@ -79,6 +80,9 @@ The SDD (ADR-020) specifies a BFF-cookie pattern as the target design. During th
 |---|---|
 | `AdminOnly` | role `admin` |
 | `RaLeadOrAdmin` | role `raLead` OR `admin` |
+| `DossierManagementRead` | `DossierManagement:Read` OR higher |
+| `DossierManagementWrite` | `DossierManagement:Write` OR `Admin` |
+| `DossierManagementReview` | `DossierManagement:Review` OR `Admin` |
 | `AuthorScope` | role `raAuthor` AND assigned to the section referenced in route |
 | `ReviewerScope` | role `raReviewer` AND assigned to the dossier referenced in route |
 
@@ -245,13 +249,13 @@ Legend:
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/v1/projects` | ∀ | List projects visible to caller (filter by status, owner, country). |
-| POST | `/api/v1/projects` | A, L | Create a new project (idempotent). |
-| GET | `/api/v1/projects/{id}` | ∀ | Read project. |
-| PATCH | `/api/v1/projects/{id}` | A, L | Update (If-Match required). |
-| DELETE | `/api/v1/projects/{id}` | A | Archive (soft delete). |
-| GET | `/api/v1/projects/{id}/members` | A, L | List assignees + roles. |
-| PUT | `/api/v1/projects/{id}/members/{userId}` | A, L | Assign role (`raAuthor`/`raReviewer`) to a user. |
+| GET | `/api/v1/projects` | DossierManagementRead | List projects visible to caller (filter by status, owner, country). |
+| POST | `/api/v1/projects` | DossierManagementWrite | Create a new project (idempotent). |
+| GET | `/api/v1/projects/{id}` | DossierManagementRead | Read project. |
+| PATCH | `/api/v1/projects/{id}` | DossierManagementWrite | Update (If-Match required). |
+| DELETE | `/api/v1/projects/{id}` | Admin | Archive (soft delete). |
+| GET | `/api/v1/projects/{id}/members` | DossierManagementRead | List assignees + roles. |
+| PUT | `/api/v1/projects/{id}/members/{userId}` | DossierManagementWrite | Assign role (`raAuthor`/`raReviewer`) to a user. |
 
 ### 11.4 M3 — CTD templates
 
@@ -270,11 +274,11 @@ Legend:
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/v1/projects/{id}/sources` | ∀ | List configured sources grouped by module. |
-| POST | `/api/v1/projects/{id}/sources` | L | Add a source (SharePoint / Blob / share) — idempotent. |
-| PATCH | `/api/v1/projects/{id}/sources/{sourceId}` | L | Update path/credentials. |
-| POST | `/api/v1/projects/{id}/sources/{sourceId}:test` | L | Attempt connectivity + list top-level items. |
-| DELETE | `/api/v1/projects/{id}/sources/{sourceId}` | L | Remove source. |
+| GET | `/api/v1/projects/{id}/sources` | DossierManagementRead | List configured sources grouped by module. |
+| POST | `/api/v1/projects/{id}/sources` | DossierManagementWrite | Add a source (SharePoint / Blob / share) — idempotent. |
+| PATCH | `/api/v1/projects/{id}/sources/{sourceId}` | DossierManagementWrite | Update path/credentials. |
+| POST | `/api/v1/projects/{id}/sources/{sourceId}:test` | DossierManagementWrite | Attempt connectivity + list top-level items. |
+| DELETE | `/api/v1/projects/{id}/sources/{sourceId}` | DossierManagementWrite | Remove source. |
 
 ### 11.6 M5 — Discovery & OCR
 
@@ -282,10 +286,10 @@ Discovery is asynchronous; requests return a **run** resource that the client po
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/api/v1/projects/{id}/discovery` | L | Start a discovery run (idempotent) — enqueues to Service Bus (SDD §8). |
-| GET | `/api/v1/runs/{runId}` | ∀ | Get run status + counts. |
-| GET | `/api/v1/runs/{runId}/events` | ∀ | SSE stream of progress events. |
-| POST | `/api/v1/runs/{runId}:cancel` | L | Request cancellation. |
+| POST | `/api/v1/projects/{id}/discovery` | DossierManagementWrite | Start a discovery run (idempotent) — enqueues to Service Bus (SDD §8). |
+| GET | `/api/v1/runs/{runId}` | DossierManagementRead | Get run status + counts. |
+| GET | `/api/v1/runs/{runId}/events` | DossierManagementRead | SSE stream of progress events. |
+| POST | `/api/v1/runs/{runId}:cancel` | DossierManagementWrite | Request cancellation. |
 | GET | `/api/v1/projects/{id}/documents` | ∀ | List discovered docs (cursor pagination). |
 | GET | `/api/v1/documents/{docId}` | ∀ | Document metadata + OCR status. |
 | GET | `/api/v1/documents/{docId}/content` | ∀ | Redirects to short-lived Blob SAS. |
@@ -302,20 +306,20 @@ Discovery is asynchronous; requests return a **run** resource that the client po
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/v1/dossiers/{id}` | ∀ | Read dossier state (draft/mapped/compiled/signed). |
-| POST | `/api/v1/dossiers` | L | Create dossier for a project. |
-| POST | `/api/v1/dossiers/{id}/sections/{code}:assign` | L | Assign a document to a CTD section (with source status). |
-| DELETE | `/api/v1/dossiers/{id}/sections/{code}/documents/{docId}` | L | Unassign. |
-| GET | `/api/v1/dossiers/{id}/sections/{code}` | ∀ | Read section detail (assignments + coverage). |
-| PUT | `/api/v1/dossiers/{id}/sections/{code}/content` | U | Save section draft content (rich text). If-Match required. |
+| GET | `/api/v1/dossiers/{id}` | DossierManagementRead | Read dossier state (draft/mapped/compiled/signed). |
+| POST | `/api/v1/dossiers` | DossierManagementWrite | Create dossier for a project. |
+| POST | `/api/v1/dossiers/{id}/sections/{code}:assign` | DossierManagementWrite | Assign a document to a CTD section (with source status). |
+| DELETE | `/api/v1/dossiers/{id}/sections/{code}/documents/{docId}` | DossierManagementWrite | Unassign. |
+| GET | `/api/v1/dossiers/{id}/sections/{code}` | DossierManagementRead | Read section detail (assignments + coverage). |
+| PUT | `/api/v1/dossiers/{id}/sections/{code}/content` | DossierManagementWrite | Save section draft content (rich text). If-Match required. |
 
 ### 11.9 M8 — Gap analysis
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/api/v1/dossiers/{id}/gap-analysis` | L, U | Run gap analysis (returns run id). |
-| GET | `/api/v1/dossiers/{id}/gap-analysis/latest` | ∀ | Latest report (missing, partial, redundant). |
-| GET | `/api/v1/dossiers/{id}/gap-analysis/{reportId}` | ∀ | Historical report. |
+| POST | `/api/v1/dossiers/{id}/gap-analysis` | DossierManagementWrite | Run gap analysis (returns run id). |
+| GET | `/api/v1/dossiers/{id}/gap-analysis/latest` | DossierManagementRead | Latest report (missing, partial, redundant). |
+| GET | `/api/v1/dossiers/{id}/gap-analysis/{reportId}` | DossierManagementRead | Historical report. |
 
 ### 11.10 M9 — Regulatory Copilot
 

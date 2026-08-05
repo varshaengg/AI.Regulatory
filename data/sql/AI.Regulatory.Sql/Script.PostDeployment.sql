@@ -153,6 +153,48 @@ WHERE u.[AadObjectId] = CAST('1a403da5-4458-420a-adaf-6ff802800cd8' AS UNIQUEIDE
 PRINT 'Seeded AppUser: Sopan (1a403da5-4458-420a-adaf-6ff802800cd8) with Admin persona';
 
 -- ---------------------------------------------------------------------------
+-- Project lifecycle seed (single-tenant demo data)
+-- ---------------------------------------------------------------------------
+MERGE [dbo].[Project] AS tgt
+USING (VALUES
+    (CAST('11111111-1111-1111-1111-111111111111' AS UNIQUEIDENTIFIER), CAST('00000000-0000-0000-0000-000000000000' AS UNIQUEIDENTIFIER), N'PX-102 · DE · Initial', 1, N'DE', N'PX-102', N'Initial',  N'Contoso Pharma', N'PX-102 Germany initial submission', 1, NULL, N'marcus.l@contoso.com', N'Marcus L.', 55, DATEADD(DAY,-42,SYSUTCDATETIME()), DATEADD(DAY,-1,SYSUTCDATETIME()), N'marcus.l@contoso.com'),
+    (CAST('22222222-2222-2222-2222-222222222222' AS UNIQUEIDENTIFIER), CAST('00000000-0000-0000-0000-000000000000' AS UNIQUEIDENTIFIER), N'PX-102 · FR · Initial', 1, N'FR', N'PX-102', N'Initial',  N'Contoso Pharma', N'PX-102 France initial submission', 1, NULL, N'marcus.l@contoso.com', N'Marcus L.', 82, DATEADD(DAY,-30,SYSUTCDATETIME()), DATEADD(DAY,-6,SYSUTCDATETIME()), N'marcus.l@contoso.com'),
+    (CAST('33333333-3333-3333-3333-333333333333' AS UNIQUEIDENTIFIER), CAST('00000000-0000-0000-0000-000000000000' AS UNIQUEIDENTIFIER), N'EL-201 · IT · Renewal', 1, N'IT', N'EL-201', N'Renewal', N'Acme Pharma',   N'EL-201 Italy renewal',         1, NULL, N'aisha.k@contoso.com',  N'Aisha K.',   35, DATEADD(DAY,-28,SYSUTCDATETIME()), DATEADD(DAY,-4,SYSUTCDATETIME()), N'aisha.k@contoso.com')
+) AS src ([Id], [TenantId], [Name], [Status], [Country], [Product], [Procedure], [Applicant], [Description], [DiscoveryStarted], [CtdTemplateVersionId], [OwnerEmail], [OwnerDisplayName], [ProgressPct], [CreatedUtc], [UpdatedUtc], [CreatedBy])
+    ON tgt.[Id] = src.[Id]
+WHEN MATCHED THEN
+    UPDATE SET [TenantId] = src.[TenantId], [Name] = src.[Name], [Status] = src.[Status], [Country] = src.[Country],
+               [Product] = src.[Product], [Procedure] = src.[Procedure], [Applicant] = src.[Applicant],
+               [Description] = src.[Description], [DiscoveryStarted] = src.[DiscoveryStarted],
+               [CtdTemplateVersionId] = src.[CtdTemplateVersionId], [OwnerEmail] = src.[OwnerEmail],
+               [OwnerDisplayName] = src.[OwnerDisplayName], [ProgressPct] = src.[ProgressPct],
+               [CreatedUtc] = src.[CreatedUtc], [UpdatedUtc] = src.[UpdatedUtc], [CreatedBy] = src.[CreatedBy]
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT ([Id], [TenantId], [Name], [Status], [Country], [Product], [Procedure], [Applicant], [Description],
+            [DiscoveryStarted], [CtdTemplateVersionId], [OwnerEmail], [OwnerDisplayName], [ProgressPct],
+            [CreatedUtc], [UpdatedUtc], [CreatedBy])
+    VALUES (src.[Id], src.[TenantId], src.[Name], src.[Status], src.[Country], src.[Product], src.[Procedure], src.[Applicant], src.[Description],
+            src.[DiscoveryStarted], src.[CtdTemplateVersionId], src.[OwnerEmail], src.[OwnerDisplayName], src.[ProgressPct],
+            src.[CreatedUtc], src.[UpdatedUtc], src.[CreatedBy]);
+
+SET IDENTITY_INSERT [dbo].[ProjectSource] ON;
+MERGE [dbo].[ProjectSource] AS tgt
+USING (VALUES
+    (1, CAST('11111111-1111-1111-1111-111111111111' AS UNIQUEIDENTIFIER), N'M1', N'Azure Blob primary', N'contosopharma/px102/m1', N'Azure Blob', DATEADD(DAY,-1,SYSUTCDATETIME()), N'ok'),
+    (2, CAST('11111111-1111-1111-1111-111111111111' AS UNIQUEIDENTIFIER), N'M2', N'Azure Blob primary', N'contosopharma/px102/m2', N'Azure Blob', DATEADD(DAY,-1,SYSUTCDATETIME()), N'ok'),
+    (3, CAST('11111111-1111-1111-1111-111111111111' AS UNIQUEIDENTIFIER), N'M3', N'Analytical reports',  N'px102-sharepoint/quality/analytical', N'SharePoint', DATEADD(DAY,-1,SYSUTCDATETIME()), N'ok'),
+    (4, CAST('11111111-1111-1111-1111-111111111111' AS UNIQUEIDENTIFIER), N'M5', N'Clinical trial data', N'contosopharma/px102/m5/ctr', N'Azure Blob', DATEADD(DAY,-2,SYSUTCDATETIME()), N'ok')
+) AS src ([Id], [ProjectId], [ModuleId], [Label], [Path], [Type], [SyncedAt], [Status])
+    ON tgt.[Id] = src.[Id]
+WHEN MATCHED THEN
+    UPDATE SET [ProjectId] = src.[ProjectId], [ModuleId] = src.[ModuleId], [Label] = src.[Label], [Path] = src.[Path],
+               [Type] = src.[Type], [SyncedAt] = src.[SyncedAt], [Status] = src.[Status]
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT ([Id], [ProjectId], [ModuleId], [Label], [Path], [Type], [SyncedAt], [Status])
+    VALUES (src.[Id], src.[ProjectId], src.[ModuleId], src.[Label], src.[Path], src.[Type], src.[SyncedAt], src.[Status]);
+SET IDENTITY_INSERT [dbo].[ProjectSource] OFF;
+
+-- ---------------------------------------------------------------------------
 -- Bootstrap: contained user for API managed identity (optional)
 --
 -- Requires BOTH sqlcmd vars to be set:
