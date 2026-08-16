@@ -1,6 +1,7 @@
 CREATE TABLE [dbo].[Project]
 (
     [Id]                    UNIQUEIDENTIFIER NOT NULL,
+    [ProjectNumber]         INT              IDENTITY(1,1) NOT NULL,
     [TenantId]              UNIQUEIDENTIFIER NOT NULL,
     [Name]                  NVARCHAR(200)    NOT NULL,
     [Status]                TINYINT          NOT NULL CONSTRAINT [DF_Project_Status] DEFAULT (0),
@@ -19,6 +20,8 @@ CREATE TABLE [dbo].[Project]
     [CreatedUtc]            DATETIME2(3)     NOT NULL CONSTRAINT [DF_Project_CreatedUtc] DEFAULT (SYSUTCDATETIME()),
     [UpdatedUtc]            DATETIME2(3)     NOT NULL CONSTRAINT [DF_Project_UpdatedUtc] DEFAULT (SYSUTCDATETIME()),
     [CreatedBy]             NVARCHAR(200)    NOT NULL,
+    [RowVersion]            ROWVERSION       NOT NULL,
     CONSTRAINT [PK_Project] PRIMARY KEY CLUSTERED ([Id]),
+    CONSTRAINT [UQ_Project_ProjectNumber] UNIQUE ([ProjectNumber]),
     CONSTRAINT [UQ_Project_Tenant_Name] UNIQUE ([TenantId], [Name])
 );
