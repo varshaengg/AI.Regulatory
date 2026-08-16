@@ -155,4 +155,5 @@ stages:
                       /Variables:ApiManagedIdentityObjectId="$(cfg.midOid)" \
                       /p:BlockOnPossibleDataLoss=${{ parameters.blockOnPossibleDataLoss }} \
                       /p:DropObjectsNotInSource=false \
-                      /p:CreateNewDatabase=false
+                      /p:CreateNewDatabase=false \
+                      /p:ScriptDatabaseOptions=false
