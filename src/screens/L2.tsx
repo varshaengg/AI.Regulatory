@@ -74,7 +74,26 @@ export default function L2Screen() {
             )}
             {projects.status === "ready" && projects.data.map((row, i) => (
               <tr key={row.id} style={{ backgroundColor: i % 2 === 0 ? "white" : C.bg }}>
-                <td style={{ ...td, color: C.brand, fontWeight: 500, cursor: "pointer" }}>{row.name}</td>
+                <td style={td}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/screen/L3?projectId=${encodeURIComponent(row.id)}`)}
+                    aria-label={`Edit dossier basics for ${row.name}`}
+                    data-id={`edit-project-${row.id}`}
+                    style={{
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      color: C.brand,
+                      font: "inherit",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    {row.name}
+                  </button>
+                </td>
                 <td style={{ ...td, color: C.text2 }}>{row.product}</td>
                 <td style={td}>{FLAG[row.country] ?? ""} {row.country}</td>
                 <td style={td}><div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{row.modules.map(m => <Chip key={m} color="brand">{m}</Chip>)}</div></td>
