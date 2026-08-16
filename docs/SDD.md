@@ -593,8 +593,10 @@ public class Project {
     public string Name { get; set; }        // unique per tenant
     public ProjectStatus Status { get; set; } // Draft, Active, Archived
     public Product Product { get; set; }
+    public string ProductVersion { get; set; }
     public string Country { get; set; }     // EU only in MVP
     public SubmissionProcedure Procedure { get; set; }
+    public DateOnly? TargetSubmissionDate { get; set; }
     public string Applicant { get; set; }
     public string? Description { get; set; }
     public DateTimeOffset CreatedUtc { get; init; }

@@ -1,9 +1,9 @@
 // Auto-split from src/app/App.tsx - screen L3.
 import * as React from "react";
-import { ArrowRight, FileText } from "lucide-react";
+import { Archive, ArrowRight, FileText } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, Stepper, ScreenCaption } from "../design/primitives";
-import { createProject, getProject } from "../api/resources";
+import { archiveProject, createProject, getProject, updateProject } from "../api/resources";
 import { usePermissions } from "../api/usePermissions";
 import { ErrorBanner, LoadingLabel, useApi } from "../api/useApi";
 import type { ProjectDetail } from "../api/types";
@@ -12,6 +12,7 @@ type FormState = {
   name: string;
   country: string;
   product: string;
+  productVersion: string;
   submissionType: "Initial" | "Variation" | "Renewal";
   targetDate: string;
   owner: string;
@@ -46,14 +47,16 @@ function initialForm(project?: ProjectDetail | null): FormState {
         name: project.name,
         country: project.country,
         product: project.product,
-        submissionType: "Initial",
-        targetDate: "2026-03-31",
+        productVersion: project.productVersion,
+        submissionType: project.procedure,
+        targetDate: project.targetSubmissionDate ?? "",
         owner: project.ownerDisplayName,
       }
     : {
         name: "PX-102 · Germany · Initial submission",
         country: "DE",
         product: "PX-102 — Elmiravir 50 mg",
+        productVersion: "v2.1",
         submissionType: "Initial",
         targetDate: "2026-03-31",
         owner: "Marcus Lindqvist (you)",
@@ -62,7 +65,8 @@ function initialForm(project?: ProjectDetail | null): FormState {
 
 export default function L3Screen() {
   const perms = usePermissions();
-  const canWrite = perms.hasPermission("DossierManagement", "Write");
+  const canAdmin = perms.hasPermission("DossierManagement", "Admin");
+  const canWrite = canAdmin || perms.hasPermission("DossierManagement", "Write");
   const [activeProjectId, setActiveProjectId] = React.useState<string | null>(() =>
     new URLSearchParams(window.location.search).get("projectId"));
 
@@ -74,16 +78,19 @@ export default function L3Screen() {
   const [form, setForm] = React.useState<FormState>(() => initialForm(null));
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [created, setCreated] = React.useState<ProjectDetail | null>(null);
+  const [persistedProject, setPersistedProject] = React.useState<ProjectDetail | null>(null);
+  const [success, setSuccess] = React.useState<string | null>(null);
   const [hydratedProjectId, setHydratedProjectId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (project.status === "ready" && project.data && hydratedProjectId !== activeProjectId) {
       setForm(initialForm(project.data));
+      setPersistedProject(project.data);
       setHydratedProjectId(activeProjectId);
     }
     if (!activeProjectId) {
       setHydratedProjectId(null);
+      setPersistedProject(null);
     }
   }, [activeProjectId, hydratedProjectId, project]);
 
@@ -98,20 +105,60 @@ export default function L3Screen() {
     }
 
     setError(null);
+    setSuccess(null);
     setSubmitting(true);
     try {
-      const detail = await createProject({
+      const request = {
         name: form.name.trim(),
         country: form.country,
         product: form.product.trim() || undefined,
-      });
-      setCreated(detail);
+        productVersion: form.productVersion.trim() || undefined,
+        procedure: form.submissionType,
+        targetSubmissionDate: form.targetDate || undefined,
+        ownerDisplayName: form.owner.trim() || undefined,
+      };
+      const detail = persistedProject
+        ? await updateProject(persistedProject.id, request, persistedProject.etag)
+        : await createProject(request);
+      setPersistedProject(detail);
       setActiveProjectId(detail.id);
       setHydratedProjectId(detail.id);
       setForm(initialForm(detail));
       window.history.replaceState({}, "", `${window.location.pathname}?projectId=${encodeURIComponent(detail.id)}`);
+      setSuccess(persistedProject ? "Project changes saved." : `Created ${detail.name} as ${detail.id}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create project.");
+      setError(err instanceof Error ? err.message : "Failed to save project.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const cancel = () => {
+    setError(null);
+    setSuccess(null);
+    if (persistedProject) {
+      setForm(initialForm(persistedProject));
+      return;
+    }
+    window.history.back();
+  };
+
+  const archive = async () => {
+    if (!persistedProject || !canAdmin || submitting) return;
+    if (!window.confirm(`Archive ${persistedProject.name}?`)) return;
+
+    setError(null);
+    setSuccess(null);
+    setSubmitting(true);
+    try {
+      await archiveProject(persistedProject.id);
+      setActiveProjectId(null);
+      setPersistedProject(null);
+      setForm(initialForm(null));
+      window.history.replaceState({}, "", window.location.pathname);
+      setSuccess("Project archived.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to archive project.");
     } finally {
       setSubmitting(false);
     }
@@ -133,9 +180,9 @@ export default function L3Screen() {
       <div style={{ marginBottom: 24 }}><Stepper steps={["Basics", "Modules", "Review & Launch"]} active={0} /></div>
 
       {error && <ErrorBanner message={error} style={{ marginBottom: 16 }} />}
-      {created && (
+      {success && (
         <div style={{ marginBottom: 16, padding: 12, borderRadius: 4, backgroundColor: C.successTint, color: C.success, fontSize: 12 }}>
-          Created {created.name} as {created.id}. You can continue with module setup and review.
+          {success}
         </div>
       )}
 
@@ -156,6 +203,7 @@ export default function L3Screen() {
               value={form.name}
               onChange={(e) => setField("name", e.target.value)}
               disabled={!canWrite || submitting}
+              data-id="project-name"
             />
           </div>
 
@@ -166,12 +214,19 @@ export default function L3Screen() {
               value={form.product}
               onChange={(e) => setField("product", e.target.value)}
               disabled={!canWrite || submitting}
+              data-id="project-product"
             />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Product version</label>
-            <input style={fieldStyle} value="v2.1" readOnly disabled />
+            <input
+              style={fieldStyle}
+              value={form.productVersion}
+              onChange={(e) => setField("productVersion", e.target.value)}
+              disabled={!canWrite || submitting}
+              data-id="project-product-version"
+            />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -181,6 +236,7 @@ export default function L3Screen() {
               value={form.country}
               onChange={(e) => setField("country", e.target.value)}
               disabled={!canWrite || submitting}
+              data-id="project-country"
             >
               {COUNTRY_OPTIONS.map((opt) => (
                 <option key={opt.code} value={opt.code}>{opt.label}</option>
@@ -206,6 +262,7 @@ export default function L3Screen() {
                     checked={form.submissionType === opt}
                     onChange={() => setField("submissionType", opt)}
                     disabled={!canWrite || submitting}
+                    data-id={`project-procedure-${opt.toLowerCase()}`}
                   />
                   {opt}
                 </label>
@@ -217,15 +274,23 @@ export default function L3Screen() {
             <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Target submission date</label>
             <input
               style={fieldStyle}
+              type="date"
               value={form.targetDate}
               onChange={(e) => setField("targetDate", e.target.value)}
               disabled={!canWrite || submitting}
+              data-id="project-target-date"
             />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Owner</label>
-            <input style={fieldStyle} value={form.owner} readOnly disabled />
+            <input
+              style={fieldStyle}
+              value={form.owner}
+              onChange={(e) => setField("owner", e.target.value)}
+              disabled={!canWrite || submitting}
+              data-id="project-owner"
+            />
           </div>
         </Card>
 
@@ -245,14 +310,16 @@ export default function L3Screen() {
           </Card>
 
           <Card style={{ padding: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text1, marginBottom: 12 }}>Create request</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text1, marginBottom: 12 }}>
+              {persistedProject ? "Update request" : "Create request"}
+            </h3>
             <div style={{ fontSize: 12, color: C.text2, marginBottom: 12 }}>
               This will create the lifecycle root record and hand off to module setup.
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <Btn variant="primary" disabled={!canWrite || submitting} onClick={submit}>
+              <Btn variant="primary" disabled={!canWrite || submitting} onClick={submit} data-id="save-project">
                 <ArrowRight size={13} />
-                {submitting ? "Creating…" : "Create project"}
+                {submitting ? "Saving…" : persistedProject ? "Save changes" : "Create project"}
               </Btn>
               <Chip color={canWrite ? "brand" : "disabled"}>{canWrite ? "Write enabled" : "Read only"}</Chip>
               {project.status === "ready" && project.data && (
@@ -264,8 +331,20 @@ export default function L3Screen() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 24 }}>
-        <Btn variant="subtle" disabled={!canWrite || submitting}>Cancel</Btn>
-        <Btn variant="secondary" disabled={!canWrite || submitting}>Save draft</Btn>
+        <div>
+          {canAdmin && persistedProject && (
+            <Btn variant="subtle" disabled={submitting} onClick={archive} data-id="archive-project">
+              <Archive size={13} />
+              Archive project
+            </Btn>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="subtle" disabled={submitting} onClick={cancel} data-id="cancel-project">Cancel</Btn>
+          <Btn variant="secondary" disabled={!canWrite || submitting} onClick={submit} data-id="save-project-draft">
+            Save draft
+          </Btn>
+        </div>
       </div>
     </div>
   );

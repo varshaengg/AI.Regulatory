@@ -4,7 +4,7 @@
 import { api } from "./client";
 import type {
   Page,
-  ProjectSummary, ProjectDetail, CreateProjectRequest,
+  ProjectSummary, ProjectDetail, CreateProjectRequest, UpdateProjectRequest,
   CtdTemplate,
   ProjectSourcesByModule,
   CtdModule, SubModule,
@@ -27,6 +27,10 @@ export const getProject = (id: string, signal?: AbortSignal) =>
   api.get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`, undefined, signal);
 export const createProject = (body: CreateProjectRequest, signal?: AbortSignal) =>
   api.post<ProjectDetail>("/projects", body, signal);
+export const updateProject = (id: string, body: UpdateProjectRequest, etag: string, signal?: AbortSignal) =>
+  api.patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}`, body, { "If-Match": etag }, signal);
+export const archiveProject = (id: string, signal?: AbortSignal) =>
+  api.del<void>(`/projects/${encodeURIComponent(id)}`, signal);
 
 // Templates
 export const listTemplates = (signal?: AbortSignal) =>

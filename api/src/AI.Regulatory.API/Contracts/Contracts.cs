@@ -50,6 +50,9 @@ public sealed record ProjectDetail(
     string Country,
     string Status,
     string Product,
+    string ProductVersion,
+    string Procedure,
+    DateOnly? TargetSubmissionDate,
     IReadOnlyList<string> Modules,
     string OwnerEmail,
     string OwnerDisplayName,
@@ -61,7 +64,20 @@ public sealed record ProjectDetail(
 public sealed record CreateProjectRequest(
     string Name,
     string Country,
-    string? Product);
+    string? Product,
+    string? ProductVersion,
+    string? Procedure,
+    DateOnly? TargetSubmissionDate,
+    string? OwnerDisplayName);
+
+public sealed record UpdateProjectRequest(
+    string Name,
+    string Country,
+    string? Product,
+    string? ProductVersion,
+    string? Procedure,
+    DateOnly? TargetSubmissionDate,
+    string? OwnerDisplayName);
 
 
 // ─── Templates catalog — A2, A3 ───────────────────────────────────────────────

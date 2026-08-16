@@ -250,9 +250,9 @@ Legend:
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/api/v1/projects` | DossierManagementRead | List projects visible to caller (filter by status, owner, country). |
-| POST | `/api/v1/projects` | DossierManagementWrite | Create a new project (idempotent). |
+| POST | `/api/v1/projects` | DossierManagementWrite | Create a new project with its product, procedure, target date, and owner metadata. |
 | GET | `/api/v1/projects/{id}` | DossierManagementRead | Read project. |
-| PATCH | `/api/v1/projects/{id}` | DossierManagementWrite | Update (If-Match required). |
+| PATCH | `/api/v1/projects/{id}` | DossierManagementWrite | Update request metadata (If-Match required). |
 | DELETE | `/api/v1/projects/{id}` | Admin | Archive (soft delete). |
 | GET | `/api/v1/projects/{id}/members` | DossierManagementRead | List assignees + roles. |
 | PUT | `/api/v1/projects/{id}/members/{userId}` | DossierManagementWrite | Assign role (`raAuthor`/`raReviewer`) to a user. |

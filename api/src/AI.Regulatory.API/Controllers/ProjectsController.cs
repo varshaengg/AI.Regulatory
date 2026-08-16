@@ -4,6 +4,7 @@ using AI.Regulatory.API.Data;
 using AI.Regulatory.API.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace AI.Regulatory.API.Controllers;
 
@@ -69,7 +70,84 @@ public sealed class ProjectsController : ControllerBase
         [FromBody] CreateProjectRequest req,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Country))
+        var validation = Validate(req.Name, req.Country, req.Procedure);
+        if (validation is not null) return validation;
+
+        var now = DateTime.UtcNow;
+        var ownerEmail = User.FindFirstValue("preferred_username") ?? User.Identity?.Name ?? "unknown@example.com";
+        var ownerDisplayName = string.IsNullOrWhiteSpace(req.OwnerDisplayName) ? ownerEmail : req.OwnerDisplayName.Trim();
+        var project = new ProjectDetail(
+            Id: Guid.NewGuid().ToString(),
+            Name: req.Name.Trim(),
+            Country: req.Country.Trim().ToUpperInvariant(),
+            Status: "Draft",
+            Product: req.Product?.Trim() ?? string.Empty,
+            ProductVersion: req.ProductVersion?.Trim() ?? string.Empty,
+            Procedure: req.Procedure?.Trim() ?? "Initial",
+            TargetSubmissionDate: req.TargetSubmissionDate,
+            Modules: Array.Empty<string>(),
+            OwnerEmail: ownerEmail,
+            OwnerDisplayName: ownerDisplayName,
+            ProgressPct: 0,
+            CreatedAt: now, UpdatedAt: now, Etag: "\"1\"");
+        var created = await _projects.AddAsync(project, ct);
+        return CreatedAtRoute("GetProject", new { id = created.Id }, created);
+    }
+
+    [HttpPatch("{id}")]
+    [Authorize(Policy = AuthPolicies.DossierManagementWrite)]
+    [ProducesResponseType(typeof(ProjectDetail), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status428PreconditionRequired)]
+    public async Task<ActionResult<ProjectDetail>> Update(
+        string id,
+        [FromHeader(Name = "If-Match")] string? ifMatch,
+        [FromBody] UpdateProjectRequest req,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(ifMatch))
+        {
+            return Problem(
+                type: ErrorTypes.PreconditionFailed,
+                title: "Precondition required",
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                detail: "If-Match is required to update a project.");
+        }
+
+        var validation = Validate(req.Name, req.Country, req.Procedure);
+        if (validation is not null) return validation;
+
+        var updated = await _projects.UpdateAsync(id, req, ifMatch, ct);
+        if (updated is not null) return Ok(updated);
+
+        var existing = await _projects.GetAsync(id, ct);
+        if (existing is null)
+        {
+            return Problem(
+                type: ErrorTypes.NotFound,
+                title: "Project not found",
+                statusCode: StatusCodes.Status404NotFound,
+                detail: $"No project with id '{id}'.");
+        }
+
+        return Problem(
+            type: ErrorTypes.PreconditionFailed,
+            title: "Project has changed",
+            statusCode: StatusCodes.Status412PreconditionFailed,
+            detail: "Reload the project before saving your changes.");
+    }
+
+    [HttpDelete("{id}")]
+    [Authorize(Policy = AuthPolicies.DossierManagementAdmin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Archive(string id, CancellationToken ct)
+        => await _projects.ArchiveAsync(id, ct) ? NoContent() : NotFound();
+
+    private ActionResult<ProjectDetail>? Validate(string name, string country, string? procedure)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(country))
         {
             return Problem(
                 type: ErrorTypes.Validation,
@@ -78,20 +156,16 @@ public sealed class ProjectsController : ControllerBase
                 detail: "name and country are required.");
         }
 
-        var id = "prj-" + Guid.NewGuid().ToString("N")[..8];
-        var now = DateTime.UtcNow;
-        var project = new ProjectDetail(
-            Id: id,
-            Name: req.Name,
-            Country: req.Country,
-            Status: "Draft",
-            Product: req.Product ?? string.Empty,
-            Modules: Array.Empty<string>(),
-            OwnerEmail: "unknown@example.com",
-            OwnerDisplayName: "Unknown",
-            ProgressPct: 0,
-            CreatedAt: now, UpdatedAt: now, Etag: "\"1\"");
-        await _projects.AddAsync(project, ct);
-        return CreatedAtRoute("GetProject", new { id }, project);
+        if (!string.IsNullOrWhiteSpace(procedure)
+            && procedure is not ("Initial" or "Variation" or "Renewal"))
+        {
+            return Problem(
+                type: ErrorTypes.Validation,
+                title: "Validation failed",
+                statusCode: StatusCodes.Status400BadRequest,
+                detail: "procedure must be Initial, Variation, or Renewal.");
+        }
+
+        return null;
     }
 }

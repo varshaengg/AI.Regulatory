@@ -47,6 +47,9 @@ export interface ProjectSummary {
 }
 
 export interface ProjectDetail extends ProjectSummary {
+  productVersion: string;
+  procedure: "Initial" | "Variation" | "Renewal";
+  targetSubmissionDate: string | null;
   ownerEmail: string;
   updatedAt: string;
   etag: string;
@@ -56,6 +59,15 @@ export interface CreateProjectRequest {
   name: string;
   country: string;
   product?: string;
+  productVersion?: string;
+  procedure?: "Initial" | "Variation" | "Renewal";
+  targetSubmissionDate?: string;
+  ownerDisplayName?: string;
+}
+
+export interface UpdateProjectRequest extends CreateProjectRequest {
+  name: string;
+  country: string;
 }
 
 // ─── Templates — A2 ─────────────────────────────────────────────────────────

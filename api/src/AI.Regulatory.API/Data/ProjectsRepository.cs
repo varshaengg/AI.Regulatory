@@ -2,6 +2,7 @@ using AI.Regulatory.API.Contracts;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 
 namespace AI.Regulatory.API.Data;
 
@@ -33,7 +34,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
         await using var c = await _sql.OpenAsync(ct);
         var projects = (await c.QueryAsync<ProjectRow>(new CommandDefinition(
             """
-            SELECT [Id], [Name], [Country], [Status], [Product], [Procedure], [Applicant],
+            SELECT [Id], [Name], [Country], [Status], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
                    [Description], [DiscoveryStarted], [CtdTemplateVersionId],
                    [OwnerEmail], [OwnerDisplayName], [ProgressPct],
                    [CreatedUtc], [UpdatedUtc], [CreatedBy]
@@ -57,7 +58,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
         await using var c = await _sql.OpenAsync(ct);
         var row = await c.QuerySingleOrDefaultAsync<ProjectRow>(new CommandDefinition(
             """
-            SELECT [Id], [Name], [Country], [Status], [Product], [Procedure], [Applicant],
+            SELECT [Id], [Name], [Country], [Status], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
                    [Description], [DiscoveryStarted], [CtdTemplateVersionId],
                    [OwnerEmail], [OwnerDisplayName], [ProgressPct],
                    [CreatedUtc], [UpdatedUtc], [CreatedBy]
@@ -81,11 +82,11 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
 
         const string insertSql = """
             INSERT INTO [dbo].[Project]
-                ([Id], [TenantId], [Name], [Status], [Country], [Product], [Procedure], [Applicant],
+                ([Id], [TenantId], [Name], [Status], [Country], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
                  [Description], [DiscoveryStarted], [CtdTemplateVersionId], [OwnerEmail], [OwnerDisplayName],
                  [ProgressPct], [CreatedUtc], [UpdatedUtc], [CreatedBy])
             VALUES
-                (@Id, @TenantId, @Name, @Status, @Country, @Product, @Procedure, @Applicant,
+                (@Id, @TenantId, @Name, @Status, @Country, @Product, @ProductVersion, @Procedure, @TargetSubmissionDate, @Applicant,
                  @Description, @DiscoveryStarted, @CtdTemplateVersionId, @OwnerEmail, @OwnerDisplayName,
                  @ProgressPct, @CreatedUtc, @UpdatedUtc, @CreatedBy);
             """;
@@ -98,7 +99,9 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
             Status = ToStatusCode(item.Status),
             Country = item.Country,
             Product = item.Product,
-            Procedure = "Initial",
+            ProductVersion = item.ProductVersion,
+            Procedure = item.Procedure,
+            TargetSubmissionDate = item.TargetSubmissionDate,
             Applicant = item.OwnerDisplayName,
             Description = (string?)null,
             DiscoveryStarted = false,
@@ -114,6 +117,103 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
         return await GetFromStoreAsync(guid.ToString(), ct) ?? item with { Id = guid.ToString() };
     }
 
+    public async Task<ProjectDetail?> UpdateAsync(
+        string id,
+        UpdateProjectRequest request,
+        string etag,
+        CancellationToken ct)
+    {
+        if (IsMocked)
+        {
+            var existing = await GetAsync(id, ct);
+            if (existing is null || !string.Equals(existing.Etag, etag, StringComparison.Ordinal))
+                return null;
+
+            var updated = existing with
+            {
+                Name = request.Name,
+                Country = request.Country,
+                Product = request.Product?.Trim() ?? string.Empty,
+                ProductVersion = request.ProductVersion?.Trim() ?? string.Empty,
+                Procedure = request.Procedure?.Trim() ?? "Initial",
+                TargetSubmissionDate = request.TargetSubmissionDate,
+                OwnerDisplayName = request.OwnerDisplayName?.Trim() ?? existing.OwnerDisplayName,
+                UpdatedAt = DateTime.UtcNow,
+            };
+            updated = updated with { Etag = ToEtag(updated.UpdatedAt) };
+            SeedList.RemoveAll(project => MatchesId(project, id));
+            SeedList.Add(updated);
+            return updated;
+        }
+
+        if (!Guid.TryParse(id, out var projectId) || !TryParseEtag(etag, out var updatedUtc))
+            return null;
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE [dbo].[Project]
+            SET [Name] = @Name,
+                [Country] = @Country,
+                [Product] = @Product,
+                [ProductVersion] = @ProductVersion,
+                [Procedure] = @Procedure,
+                [TargetSubmissionDate] = @TargetSubmissionDate,
+                [Applicant] = @OwnerDisplayName,
+                [OwnerDisplayName] = @OwnerDisplayName,
+                [UpdatedUtc] = SYSUTCDATETIME()
+            WHERE [Id] = @ProjectId
+              AND [UpdatedUtc] = @UpdatedUtc;
+            """,
+            new
+            {
+                ProjectId = projectId,
+                request.Name,
+                request.Country,
+                Product = request.Product?.Trim() ?? string.Empty,
+                ProductVersion = request.ProductVersion?.Trim() ?? string.Empty,
+                Procedure = request.Procedure?.Trim() ?? "Initial",
+                request.TargetSubmissionDate,
+                OwnerDisplayName = request.OwnerDisplayName?.Trim() ?? string.Empty,
+                UpdatedUtc = updatedUtc,
+            },
+            cancellationToken: ct));
+
+        return rows == 0 ? null : await GetFromStoreAsync(id, ct);
+    }
+
+    public async Task<bool> ArchiveAsync(string id, CancellationToken ct)
+    {
+        if (IsMocked)
+        {
+            var existing = await GetAsync(id, ct);
+            if (existing is null)
+                return false;
+
+            var archived = existing with { Status = "Archived", UpdatedAt = DateTime.UtcNow };
+            archived = archived with { Etag = ToEtag(archived.UpdatedAt) };
+            SeedList.RemoveAll(project => MatchesId(project, id));
+            SeedList.Add(archived);
+            return true;
+        }
+
+        if (!Guid.TryParse(id, out var projectId))
+            return false;
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE [dbo].[Project]
+            SET [Status] = 2,
+                [UpdatedUtc] = SYSUTCDATETIME()
+            WHERE [Id] = @ProjectId
+              AND [Status] <> 2;
+            """,
+            new { ProjectId = projectId },
+            cancellationToken: ct));
+        return rows > 0;
+    }
+
     private static ProjectDetail ToDetail(ProjectRow row, IReadOnlyList<string> modules)
         => new(
             Id: row.Id.ToString(),
@@ -121,13 +221,31 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
             Country: row.Country,
             Status: FromStatusCode(row.Status),
             Product: row.Product,
+            ProductVersion: row.ProductVersion,
+            Procedure: row.Procedure,
+            TargetSubmissionDate: row.TargetSubmissionDate,
             Modules: modules,
             OwnerEmail: row.OwnerEmail,
             OwnerDisplayName: row.OwnerDisplayName,
             ProgressPct: row.ProgressPct,
             CreatedAt: row.CreatedUtc,
             UpdatedAt: row.UpdatedUtc,
-            Etag: $"\"{row.UpdatedUtc.Ticks:x}\"");
+            Etag: ToEtag(row.UpdatedUtc));
+
+    private static string ToEtag(DateTime updatedUtc) => $"\"{updatedUtc.Ticks:x}\"";
+
+    private static bool TryParseEtag(string etag, out DateTime updatedUtc)
+    {
+        var token = etag.Trim().Trim('"');
+        if (long.TryParse(token, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var ticks))
+        {
+            updatedUtc = new DateTime(ticks, DateTimeKind.Utc);
+            return true;
+        }
+
+        updatedUtc = default;
+        return false;
+    }
 
     private static byte ToStatusCode(string status)
     {
@@ -176,7 +294,9 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
         public string Country { get; init; } = string.Empty;
         public byte Status { get; init; }
         public string Product { get; init; } = string.Empty;
+        public string ProductVersion { get; init; } = string.Empty;
         public string Procedure { get; init; } = string.Empty;
+        public DateOnly? TargetSubmissionDate { get; init; }
         public string Applicant { get; init; } = string.Empty;
         public string? Description { get; init; }
         public bool DiscoveryStarted { get; init; }
@@ -197,7 +317,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
 
     private static ProjectDetail Make(string id, string name, string country, string status, string product,
         string[] modules, string owner, int pct, int createdDaysAgo, int updatedDaysAgo)
-        => new(id, name, country, status, product, modules,
+        => new(id, name, country, status, product, string.Empty, "Initial", null, modules,
                $"{owner.Replace(" ", "").ToLower()}@ucatalyst.onmicrosoft.com",
                owner, pct,
                DateTime.UtcNow.AddDays(createdDaysAgo), DateTime.UtcNow.AddDays(updatedDaysAgo),

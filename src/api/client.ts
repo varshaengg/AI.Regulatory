@@ -56,12 +56,13 @@ function buildUrl(path: string, query?: Query): string {
 async function request<TResponse>(
   method: string,
   path: string,
-  options: { query?: Query; body?: unknown; signal?: AbortSignal } = {},
+  options: { query?: Query; body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } = {},
 ): Promise<TResponse> {
   const token = await bearerToken();
   const headers: Record<string, string> = {
     Accept: "application/json",
     Authorization: `Bearer ${token}`,
+    ...options.headers,
   };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
@@ -91,6 +92,7 @@ export const api = {
   get:  <T>(path: string, query?: Query, signal?: AbortSignal) => request<T>("GET", path, { query, signal }),
   post: <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("POST", path, { body, signal }),
   put:  <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("PUT", path, { body, signal }),
-  patch:<T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("PATCH", path, { body, signal }),
+  patch:<T>(path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal) =>
+    request<T>("PATCH", path, { body, headers, signal }),
   del:  <T>(path: string, signal?: AbortSignal) => request<T>("DELETE", path, { signal }),
 };

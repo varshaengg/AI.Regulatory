@@ -141,6 +141,8 @@ Deliver the dossier/project lifecycle flow end-to-end: L1 dashboard, L2 project 
 - `GET /api/v1/projects`
 - `POST /api/v1/projects`
 - `GET /api/v1/projects/{id}`
+- `PATCH /api/v1/projects/{id}` (ETag-protected metadata update)
+- `DELETE /api/v1/projects/{id}` (admin-only soft archive)
 - `GET /api/v1/projects/{id}/sources`
 - `POST /api/v1/projects/{id}/discovery`
 - `GET /api/v1/runs/{runId}`
@@ -158,6 +160,7 @@ Deliver the dossier/project lifecycle flow end-to-end: L1 dashboard, L2 project 
 - SQL schema scaffolded
 - API controllers gated by lifecycle permissions
 - Project repository moved to SQL-backed storage
+- L3 request form supports create, load, update, reset, and admin archive against live APIs
 - L1/L2 now respect write permission for new dossier action
 - Remaining work: connect L3-L6 to live create/run actions and remove remaining demo-only state
 
