@@ -85,33 +85,36 @@ stages:
               - download: current
                 artifact: dacpac
               - task: AzureCLI@2
-                displayName: 'Resolve SQL server FQDN + API app name from Bicep outputs'
+                displayName: 'Resolve SQL target and API identity from code-owned settings'
                 name: cfg
                 inputs:
                   azureSubscription: $(azureSubscription)
                   scriptType: pscore
                   scriptLocation: inlineScript
                   inlineScript: |
-                    $latest = az deployment sub list `
-                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" `
-                      -o tsv 2>$null
-                    if (-not $latest) { throw "No prior ara-${{ parameters.targetEnv }}-* deployment. Run infra pipeline first." }
-
-                    $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value" -o tsv
-                    $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
-                    $srv   = "sql-$np"
-                    $fqdn  = az sql server show -g $rg -n $srv --query "fullyQualifiedDomainName" -o tsv
-
-                    # Workload user-assigned managed identity (shared across apps).
-                    $midName = az deployment sub show --name $latest --query "properties.outputs.workloadIdentityName.value" -o tsv
-                    $midOid  = az deployment sub show --name $latest --query "properties.outputs.workloadIdentityPrincipalId.value" -o tsv
-                    if (-not $midName -or -not $midOid) {
-                      throw "workloadIdentity outputs missing. Add { kind: 'managedIdentity' } to parameters.<env>.json and re-run infra."
+                    $settingsPath = "$(Build.SourcesDirectory)/deploy/config/appsettings.api.code.${{ parameters.targetEnv }}.json"
+                    $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json
+                    $connectionString = ($settings | Where-Object { $_.name -eq 'ConnectionStrings__ArtaSql' }).value
+                    $midClientId = ($settings | Where-Object { $_.name -eq 'EntraId__ClientCredentials__0__ManagedIdentityClientId' }).value
+                    if ([string]::IsNullOrWhiteSpace($connectionString) -or [string]::IsNullOrWhiteSpace($midClientId)) {
+                      throw "Missing ConnectionStrings__ArtaSql or EntraId__ClientCredentials__0__ManagedIdentityClientId in $settingsPath."
                     }
 
-                    Write-Host "namePrefix       = $np"
-                    Write-Host "resourceGroup    = $rg"
-                    Write-Host "sqlServer        = $srv ($fqdn)"
+                    if ($connectionString -notmatch '(?i)(?:^|;)\s*(?:Server|Data Source)\s*=\s*([^;]+)') {
+                      throw "ConnectionStrings__ArtaSql in $settingsPath does not contain a SQL Server value."
+                    }
+                    $fqdn = $Matches[1].Trim() -replace '^tcp:', '' -replace ',\d+$', ''
+
+                    # Resolve the UAMI used by the API rather than inferring it from an
+                    # unrelated regional infrastructure deployment.
+                    $identity = az identity list --query "[?clientId=='$midClientId'] | [0].{name:name,principalId:principalId}" -o json | ConvertFrom-Json
+                    $midName = $identity.name
+                    $midOid = $identity.principalId
+                    if (-not $midName -or -not $midOid) {
+                      throw "No user-assigned managed identity with client ID $midClientId was found."
+                    }
+
+                    Write-Host "sqlServer        = $fqdn"
                     Write-Host "workloadIdentity = $midName ($midOid)"
 
                     Write-Host "##vso[task.setvariable variable=sqlFqdn;isOutput=true]$fqdn"
