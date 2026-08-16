@@ -82,6 +82,7 @@ stages:
         runOnce:
           deploy:
             steps:
+              - checkout: self
               - download: current
                 artifact: dacpac
               - task: AzureCLI@2
