@@ -223,7 +223,9 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
             Product: row.Product,
             ProductVersion: row.ProductVersion,
             Procedure: row.Procedure,
-            TargetSubmissionDate: row.TargetSubmissionDate,
+            TargetSubmissionDate: row.TargetSubmissionDate is { } targetSubmissionDate
+                ? DateOnly.FromDateTime(targetSubmissionDate)
+                : null,
             Modules: modules,
             OwnerEmail: row.OwnerEmail,
             OwnerDisplayName: row.OwnerDisplayName,
@@ -296,7 +298,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
         public string Product { get; init; } = string.Empty;
         public string ProductVersion { get; init; } = string.Empty;
         public string Procedure { get; init; } = string.Empty;
-        public DateOnly? TargetSubmissionDate { get; init; }
+        public DateTime? TargetSubmissionDate { get; init; }
         public string Applicant { get; init; } = string.Empty;
         public string? Description { get; init; }
         public bool DiscoveryStarted { get; init; }
