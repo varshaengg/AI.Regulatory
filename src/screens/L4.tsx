@@ -1,6 +1,7 @@
 // L4 — Module & sub-module coverage wizard step. Sub-modules loaded from API.
 import * as React from "react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { Upload, ArrowRight } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, Stepper, ScreenCaption } from "../design/primitives";
@@ -8,7 +9,10 @@ import { listModules, listSubModules } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 
 export default function L4Screen() {
+  const navigate = useNavigate();
+  const projectId = new URLSearchParams(window.location.search).get("projectId");
   const [sel, setSel] = useState(2);
+  const projectQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
 
   const modules = useApi((sig) => listModules(sig), []);
   const active = modules.status === "ready" ? modules.data[sel] : null;
@@ -103,10 +107,14 @@ export default function L4Screen() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", borderTop: `1px solid ${C.border1}`, marginTop: 16 }}>
-        <Btn variant="subtle">← Back</Btn>
+        <Btn variant="subtle" onClick={() => navigate(`/screen/L3${projectQuery}`)} data-id="back-project-basics">
+          ← Back
+        </Btn>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn variant="secondary">Save draft</Btn>
-          <Btn variant="primary">Next <ArrowRight size={13} /></Btn>
+          <Btn variant="primary" onClick={() => navigate(`/screen/L5${projectQuery}`)} data-id="next-project-review">
+            Next <ArrowRight size={13} />
+          </Btn>
         </div>
       </div>
     </div>

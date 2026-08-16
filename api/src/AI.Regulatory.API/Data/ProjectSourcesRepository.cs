@@ -27,13 +27,13 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
 
     protected override IEnumerable<ProjectSource> SeedData() => new[]
     {
-        new ProjectSource(1, "px-102-de", "M1", "Azure Blob primary", "contosopharma/px102/m1",              "Azure Blob",  D(-1,  9,12), "ok"),
-        new ProjectSource(2, "px-102-de", "M2", "Azure Blob primary", "contosopharma/px102/m2",              "Azure Blob",  D(-1,  8,45), "ok"),
-        new ProjectSource(3, "px-102-de", "M3", "Drug substance data","contosopharma/px102/m3/drug-substance","Azure Blob", D(-1,  7,30), "ok"),
-        new ProjectSource(4, "px-102-de", "M3", "Analytical reports", "px102-sharepoint/quality/analytical", "SharePoint",  D(-1,  7,28), "ok"),
-        new ProjectSource(5, "px-102-de", "M3", "Stability studies",  "contosopharma/px102/m3/stability",    "Azure Blob",  D(-2, 22, 0), "warning"),
-        new ProjectSource(6, "px-102-de", "M5", "Clinical trial data","contosopharma/px102/m5/ctr",          "Azure Blob",  D(-2, 16,40), "ok"),
-        new ProjectSource(7, "px-102-de", "M5", "ISS / ISE reports",  "px102-sharepoint/clinical/iss",       "SharePoint",  D(-2, 14,10), "error"),
+        new ProjectSource(1, "1", "M1", "Azure Blob primary", "contosopharma/px102/m1",              "Azure Blob",  D(-1,  9,12), "ok"),
+        new ProjectSource(2, "1", "M2", "Azure Blob primary", "contosopharma/px102/m2",              "Azure Blob",  D(-1,  8,45), "ok"),
+        new ProjectSource(3, "1", "M3", "Drug substance data","contosopharma/px102/m3/drug-substance","Azure Blob", D(-1,  7,30), "ok"),
+        new ProjectSource(4, "1", "M3", "Analytical reports", "px102-sharepoint/quality/analytical", "SharePoint",  D(-1,  7,28), "ok"),
+        new ProjectSource(5, "1", "M3", "Stability studies",  "contosopharma/px102/m3/stability",    "Azure Blob",  D(-2, 22, 0), "warning"),
+        new ProjectSource(6, "1", "M5", "Clinical trial data","contosopharma/px102/m5/ctr",          "Azure Blob",  D(-2, 16,40), "ok"),
+        new ProjectSource(7, "1", "M5", "ISS / ISE reports",  "px102-sharepoint/clinical/iss",       "SharePoint",  D(-2, 14,10), "error"),
     };
 
     protected override async Task<IReadOnlyList<ProjectSource>> ListFromStoreAsync(CancellationToken ct)
@@ -41,9 +41,11 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
         await using var c = await _sql.OpenAsync(ct);
         var rows = await c.QueryAsync<ProjectSource>(new CommandDefinition(
             """
-            SELECT [Id], [ProjectId], [ModuleId], [Label], [Path], [Type], [SyncedAt], [Status]
-            FROM [dbo].[ProjectSource]
-            ORDER BY [ProjectId], [ModuleId], [Id];
+            SELECT ps.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId],
+                   ps.[ModuleId], ps.[Label], ps.[Path], ps.[Type], ps.[SyncedAt], ps.[Status]
+            FROM [dbo].[ProjectSource] ps
+            JOIN [dbo].[Project] p ON p.[Id] = ps.[ProjectId]
+            ORDER BY p.[ProjectNumber], ps.[ModuleId], ps.[Id];
             """,
             cancellationToken: ct));
         return rows.ToArray();
@@ -57,9 +59,11 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
         await using var c = await _sql.OpenAsync(ct);
         return await c.QuerySingleOrDefaultAsync<ProjectSource>(new CommandDefinition(
             """
-            SELECT [Id], [ProjectId], [ModuleId], [Label], [Path], [Type], [SyncedAt], [Status]
-            FROM [dbo].[ProjectSource]
-            WHERE [Id] = @intId;
+            SELECT ps.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId],
+                   ps.[ModuleId], ps.[Label], ps.[Path], ps.[Type], ps.[SyncedAt], ps.[Status]
+            FROM [dbo].[ProjectSource] ps
+            JOIN [dbo].[Project] p ON p.[Id] = ps.[ProjectId]
+            WHERE ps.[Id] = @intId;
             """,
             new { intId }, cancellationToken: ct));
     }

@@ -132,7 +132,7 @@ Deliver the dossier/project lifecycle flow end-to-end: L1 dashboard, L2 project 
 - **Admin**: archive/override operations.
 
 ### Data model
-- `Project` — tenant-scoped lifecycle root row.
+- `Project` — tenant-scoped lifecycle root row with an incremental public `ProjectNumber`, an internal GUID relational key, and `ROWVERSION` concurrency.
 - `ProjectSource` — per-project module source configuration.
 - `DossierRun` — lifecycle run state, outputs, and status.
 - `DossierRunEvent` — audit/progress stream for runs.
@@ -161,6 +161,8 @@ Deliver the dossier/project lifecycle flow end-to-end: L1 dashboard, L2 project 
 - API controllers gated by lifecycle permissions
 - Project repository moved to SQL-backed storage
 - L3 request form supports create, load, update, reset, and admin archive against live APIs
+- Project API/UI routes use simple incremental IDs; updates use SQL rowversion ETags
+- L3 Basics and L4 Modules provide Next/Back navigation while preserving the project ID
 - L1/L2 now respect write permission for new dossier action
 - Remaining work: connect L3-L6 to live create/run actions and remove remaining demo-only state
 

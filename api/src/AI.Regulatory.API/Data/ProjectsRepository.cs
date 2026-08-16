@@ -19,25 +19,37 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
 
     protected override IEnumerable<ProjectDetail> SeedData() => new[]
     {
-        Make("px-102-de", "PX-102 · DE · Initial",  "DE", "In progress", "PX-102", new[] {"M1","M2","M3","M4","M5"}, "Marcus L.", 55, -42, -1),
-        Make("px-102-fr", "PX-102 · FR · Initial",  "FR", "Reviewing",   "PX-102", new[] {"M1","M2","M3"},           "Marcus L.", 82, -30, -6),
-        Make("el-201-it", "EL-201 · IT · Renewal",  "IT", "Blocked",     "EL-201", new[] {"M1","M2","M3","M5"},      "Aisha K.",  35, -28, -4),
-        Make("el-201-es", "EL-201 · ES · Variation","ES", "Draft",       "EL-201", new[] {"M2","M3"},                "Marcus L.", 18,  -8, -2),
-        Make("px-102-nl", "PX-102 · NL · Variation","NL", "Submitted",   "PX-102", new[] {"M1","M3","M5"},           "Tom K.",   100, -70,-40),
-        Make("cv-304-de", "CV-304 · DE · Initial",  "DE", "In progress", "CV-304", new[] {"M1","M2","M3","M4","M5"}, "Aisha K.",  72,  -6, -1),
-        Make("cv-304-fr", "CV-304 · FR · Initial",  "FR", "Reviewing",   "CV-304", new[] {"M1","M2","M3"},           "Tom K.",    40,  -5, -1),
-        Make("px-102-uk", "PX-102 · UK · Initial",  "UK", "Draft",       "PX-102", new[] {"M1","M2","M3","M4","M5"}, "Marcus L.",  0,  -2, -1),
+        Make("1", "PX-102 · DE · Initial",  "DE", "In progress", "PX-102", new[] {"M1","M2","M3","M4","M5"}, "Marcus L.", 55, -42, -1),
+        Make("2", "PX-102 · FR · Initial",  "FR", "Reviewing",   "PX-102", new[] {"M1","M2","M3"},           "Marcus L.", 82, -30, -6),
+        Make("3", "EL-201 · IT · Renewal",  "IT", "Blocked",     "EL-201", new[] {"M1","M2","M3","M5"},      "Aisha K.",  35, -28, -4),
+        Make("4", "EL-201 · ES · Variation","ES", "Draft",       "EL-201", new[] {"M2","M3"},                "Marcus L.", 18,  -8, -2),
+        Make("5", "PX-102 · NL · Variation","NL", "Submitted",   "PX-102", new[] {"M1","M3","M5"},           "Tom K.",   100, -70,-40),
+        Make("6", "CV-304 · DE · Initial",  "DE", "In progress", "CV-304", new[] {"M1","M2","M3","M4","M5"}, "Aisha K.",  72,  -6, -1),
+        Make("7", "CV-304 · FR · Initial",  "FR", "Reviewing",   "CV-304", new[] {"M1","M2","M3"},           "Tom K.",    40,  -5, -1),
+        Make("8", "PX-102 · UK · Initial",  "UK", "Draft",       "PX-102", new[] {"M1","M2","M3","M4","M5"}, "Marcus L.",  0,  -2, -1),
     };
+
+    public override Task<ProjectDetail> AddAsync(ProjectDetail item, CancellationToken ct = default)
+    {
+        if (!IsMocked)
+            return base.AddAsync(item, ct);
+
+        var nextId = SeedList
+            .Select(project => int.TryParse(project.Id, out var id) ? id : 0)
+            .DefaultIfEmpty()
+            .Max() + 1;
+        return base.AddAsync(item with { Id = nextId.ToString(CultureInfo.InvariantCulture) }, ct);
+    }
 
     protected override async Task<IReadOnlyList<ProjectDetail>> ListFromStoreAsync(CancellationToken ct)
     {
         await using var c = await _sql.OpenAsync(ct);
         var projects = (await c.QueryAsync<ProjectRow>(new CommandDefinition(
             """
-            SELECT [Id], [Name], [Country], [Status], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
+            SELECT [Id], [ProjectNumber], [Name], [Country], [Status], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
                    [Description], [DiscoveryStarted], [CtdTemplateVersionId],
                    [OwnerEmail], [OwnerDisplayName], [ProgressPct],
-                   [CreatedUtc], [UpdatedUtc], [CreatedBy]
+                   [CreatedUtc], [UpdatedUtc], [CreatedBy], [RowVersion]
             FROM [dbo].[Project]
             ORDER BY [UpdatedUtc] DESC, [CreatedUtc] DESC;
             """,
@@ -52,20 +64,20 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
 
     protected override async Task<ProjectDetail?> GetFromStoreAsync(string id, CancellationToken ct)
     {
-        if (!Guid.TryParse(id, out var guid))
-            return SeedList.FirstOrDefault(p => MatchesId(p, id));
+        if (!int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var projectNumber))
+            return null;
 
         await using var c = await _sql.OpenAsync(ct);
         var row = await c.QuerySingleOrDefaultAsync<ProjectRow>(new CommandDefinition(
             """
-            SELECT [Id], [Name], [Country], [Status], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
+            SELECT [Id], [ProjectNumber], [Name], [Country], [Status], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
                    [Description], [DiscoveryStarted], [CtdTemplateVersionId],
                    [OwnerEmail], [OwnerDisplayName], [ProgressPct],
-                   [CreatedUtc], [UpdatedUtc], [CreatedBy]
+                   [CreatedUtc], [UpdatedUtc], [CreatedBy], [RowVersion]
             FROM [dbo].[Project]
-            WHERE [Id] = @guid;
+            WHERE [ProjectNumber] = @projectNumber;
             """,
-            new { guid }, cancellationToken: ct));
+            new { projectNumber }, cancellationToken: ct));
 
         if (row is null)
             return null;
@@ -77,7 +89,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
     protected override async Task<ProjectDetail> AddToStoreAsync(ProjectDetail item, CancellationToken ct)
     {
         await using var c = await _sql.OpenAsync(ct);
-        var guid = Guid.TryParse(item.Id, out var parsed) ? parsed : Guid.NewGuid();
+        var internalId = Guid.NewGuid();
         var now = item.CreatedAt;
 
         const string insertSql = """
@@ -85,15 +97,16 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
                 ([Id], [TenantId], [Name], [Status], [Country], [Product], [ProductVersion], [Procedure], [TargetSubmissionDate], [Applicant],
                  [Description], [DiscoveryStarted], [CtdTemplateVersionId], [OwnerEmail], [OwnerDisplayName],
                  [ProgressPct], [CreatedUtc], [UpdatedUtc], [CreatedBy])
+            OUTPUT INSERTED.[ProjectNumber]
             VALUES
                 (@Id, @TenantId, @Name, @Status, @Country, @Product, @ProductVersion, @Procedure, @TargetSubmissionDate, @Applicant,
                  @Description, @DiscoveryStarted, @CtdTemplateVersionId, @OwnerEmail, @OwnerDisplayName,
                  @ProgressPct, @CreatedUtc, @UpdatedUtc, @CreatedBy);
             """;
 
-        await c.ExecuteAsync(new CommandDefinition(insertSql, new
+        var projectNumber = await c.ExecuteScalarAsync<int>(new CommandDefinition(insertSql, new
         {
-            Id = guid,
+            Id = internalId,
             TenantId = Guid.Empty,
             Name = item.Name,
             Status = ToStatusCode(item.Status),
@@ -114,7 +127,8 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
             CreatedBy = item.OwnerEmail
         }, cancellationToken: ct));
 
-        return await GetFromStoreAsync(guid.ToString(), ct) ?? item with { Id = guid.ToString() };
+        return await GetFromStoreAsync(projectNumber.ToString(CultureInfo.InvariantCulture), ct)
+            ?? throw new InvalidOperationException($"Failed to read back project {projectNumber}.");
     }
 
     public async Task<ProjectDetail?> UpdateAsync(
@@ -140,13 +154,14 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
                 OwnerDisplayName = request.OwnerDisplayName?.Trim() ?? existing.OwnerDisplayName,
                 UpdatedAt = DateTime.UtcNow,
             };
-            updated = updated with { Etag = ToEtag(updated.UpdatedAt) };
+            updated = updated with { Etag = NewMockEtag() };
             SeedList.RemoveAll(project => MatchesId(project, id));
             SeedList.Add(updated);
             return updated;
         }
 
-        if (!Guid.TryParse(id, out var projectId) || !TryParseEtag(etag, out var updatedUtc))
+        if (!int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var projectNumber)
+            || !TryParseEtag(etag, out var rowVersion))
             return null;
 
         await using var c = await _sql.OpenAsync(ct);
@@ -162,12 +177,12 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
                 [Applicant] = @OwnerDisplayName,
                 [OwnerDisplayName] = @OwnerDisplayName,
                 [UpdatedUtc] = SYSUTCDATETIME()
-            WHERE [Id] = @ProjectId
-              AND [UpdatedUtc] = @UpdatedUtc;
+            WHERE [ProjectNumber] = @ProjectNumber
+              AND [RowVersion] = @RowVersion;
             """,
             new
             {
-                ProjectId = projectId,
+                ProjectNumber = projectNumber,
                 request.Name,
                 request.Country,
                 Product = request.Product?.Trim() ?? string.Empty,
@@ -175,7 +190,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
                 Procedure = request.Procedure?.Trim() ?? "Initial",
                 TargetSubmissionDate = request.TargetSubmissionDate?.ToDateTime(TimeOnly.MinValue),
                 OwnerDisplayName = request.OwnerDisplayName?.Trim() ?? string.Empty,
-                UpdatedUtc = updatedUtc,
+                RowVersion = rowVersion,
             },
             cancellationToken: ct));
 
@@ -191,13 +206,13 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
                 return false;
 
             var archived = existing with { Status = "Archived", UpdatedAt = DateTime.UtcNow };
-            archived = archived with { Etag = ToEtag(archived.UpdatedAt) };
+            archived = archived with { Etag = NewMockEtag() };
             SeedList.RemoveAll(project => MatchesId(project, id));
             SeedList.Add(archived);
             return true;
         }
 
-        if (!Guid.TryParse(id, out var projectId))
+        if (!int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var projectNumber))
             return false;
 
         await using var c = await _sql.OpenAsync(ct);
@@ -206,17 +221,17 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
             UPDATE [dbo].[Project]
             SET [Status] = 2,
                 [UpdatedUtc] = SYSUTCDATETIME()
-            WHERE [Id] = @ProjectId
+            WHERE [ProjectNumber] = @ProjectNumber
               AND [Status] <> 2;
             """,
-            new { ProjectId = projectId },
+            new { ProjectNumber = projectNumber },
             cancellationToken: ct));
         return rows > 0;
     }
 
     private static ProjectDetail ToDetail(ProjectRow row, IReadOnlyList<string> modules)
         => new(
-            Id: row.Id.ToString(),
+            Id: row.ProjectNumber.ToString(CultureInfo.InvariantCulture),
             Name: row.Name,
             Country: row.Country,
             Status: FromStatusCode(row.Status),
@@ -232,22 +247,26 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
             ProgressPct: row.ProgressPct,
             CreatedAt: row.CreatedUtc,
             UpdatedAt: row.UpdatedUtc,
-            Etag: ToEtag(row.UpdatedUtc));
+            Etag: ToEtag(row.RowVersion));
 
-    private static string ToEtag(DateTime updatedUtc) => $"\"{updatedUtc.Ticks:x}\"";
+    private static string ToEtag(byte[] rowVersion) => $"\"{Convert.ToBase64String(rowVersion)}\"";
 
-    private static bool TryParseEtag(string etag, out DateTime updatedUtc)
+    private static bool TryParseEtag(string etag, out byte[] rowVersion)
     {
         var token = etag.Trim().Trim('"');
-        if (long.TryParse(token, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var ticks))
+        try
         {
-            updatedUtc = new DateTime(ticks, DateTimeKind.Utc);
+            rowVersion = Convert.FromBase64String(token);
             return true;
         }
-
-        updatedUtc = default;
-        return false;
+        catch (FormatException)
+        {
+            rowVersion = [];
+            return false;
+        }
     }
+
+    private static string NewMockEtag() => $"\"{Guid.NewGuid():N}\"";
 
     private static byte ToStatusCode(string status)
     {
@@ -292,6 +311,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
     private sealed class ProjectRow
     {
         public Guid Id { get; init; }
+        public int ProjectNumber { get; init; }
         public string Name { get; init; } = string.Empty;
         public string Country { get; init; } = string.Empty;
         public byte Status { get; init; }
@@ -309,6 +329,7 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
         public DateTime CreatedUtc { get; init; }
         public DateTime UpdatedUtc { get; init; }
         public string CreatedBy { get; init; } = string.Empty;
+        public byte[] RowVersion { get; init; } = [];
     }
 
     private sealed class ProjectModuleRow
@@ -323,5 +344,5 @@ public sealed class ProjectsRepository : BaseRepository<ProjectDetail>
                $"{owner.Replace(" ", "").ToLower()}@ucatalyst.onmicrosoft.com",
                owner, pct,
                DateTime.UtcNow.AddDays(createdDaysAgo), DateTime.UtcNow.AddDays(updatedDaysAgo),
-               "\"" + Guid.NewGuid().ToString("N")[..8] + "\"");
+               NewMockEtag());
 }

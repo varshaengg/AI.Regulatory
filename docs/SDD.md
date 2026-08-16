@@ -1547,7 +1547,8 @@ erDiagram
 
 ```sql
 CREATE TABLE Project (
-    Id UNIQUEIDENTIFIER PRIMARY KEY,
+    Id UNIQUEIDENTIFIER PRIMARY KEY,         -- internal relational key
+    ProjectNumber INT IDENTITY(1,1) NOT NULL UNIQUE, -- public API/UI id
     TenantId UNIQUEIDENTIFIER NOT NULL,
     Name NVARCHAR(200) NOT NULL,
     Status TINYINT NOT NULL,             -- 0 Draft, 1 Active, 2 Archived
@@ -1559,6 +1560,7 @@ CREATE TABLE Project (
     CtdTemplateVersionId UNIQUEIDENTIFIER NOT NULL,   -- locked at creation
     CreatedUtc DATETIME2 NOT NULL,
     CreatedBy NVARCHAR(200) NOT NULL,
+    RowVersion ROWVERSION NOT NULL,          -- optimistic concurrency token
     CONSTRAINT UX_Project_Tenant_Name UNIQUE (TenantId, Name)
 );
 

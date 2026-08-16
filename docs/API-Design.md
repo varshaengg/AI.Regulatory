@@ -247,12 +247,17 @@ Legend:
 
 ### 11.3 M2 — Projects
 
+Project routes expose the database-generated decimal `ProjectNumber` (for example,
+`/api/v1/projects/12`). The internal GUID remains private to relational foreign keys.
+Project ETags are generated from SQL `ROWVERSION`; clients must return the ETag in
+`If-Match` when updating.
+
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/api/v1/projects` | DossierManagementRead | List projects visible to caller (filter by status, owner, country). |
 | POST | `/api/v1/projects` | DossierManagementWrite | Create a new project with its product, procedure, target date, and owner metadata. |
 | GET | `/api/v1/projects/{id}` | DossierManagementRead | Read project. |
-| PATCH | `/api/v1/projects/{id}` | DossierManagementWrite | Update request metadata (If-Match required). |
+| PATCH | `/api/v1/projects/{id}` | DossierManagementWrite | Update request metadata (`If-Match` with the latest rowversion ETag required). |
 | DELETE | `/api/v1/projects/{id}` | Admin | Archive (soft delete). |
 | GET | `/api/v1/projects/{id}/members` | DossierManagementRead | List assignees + roles. |
 | PUT | `/api/v1/projects/{id}/members/{userId}` | DossierManagementWrite | Assign role (`raAuthor`/`raReviewer`) to a user. |

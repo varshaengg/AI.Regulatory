@@ -77,7 +77,7 @@ public sealed class ProjectsController : ControllerBase
         var ownerEmail = User.FindFirstValue("preferred_username") ?? User.Identity?.Name ?? "unknown@example.com";
         var ownerDisplayName = string.IsNullOrWhiteSpace(req.OwnerDisplayName) ? ownerEmail : req.OwnerDisplayName.Trim();
         var project = new ProjectDetail(
-            Id: Guid.NewGuid().ToString(),
+            Id: string.Empty,
             Name: req.Name.Trim(),
             Country: req.Country.Trim().ToUpperInvariant(),
             Status: "Draft",

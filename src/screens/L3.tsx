@@ -1,5 +1,6 @@
 // Auto-split from src/app/App.tsx - screen L3.
 import * as React from "react";
+import { useNavigate } from "react-router";
 import { Archive, ArrowRight, FileText } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, Stepper, ScreenCaption } from "../design/primitives";
@@ -64,6 +65,7 @@ function initialForm(project?: ProjectDetail | null): FormState {
 }
 
 export default function L3Screen() {
+  const navigate = useNavigate();
   const perms = usePermissions();
   const canAdmin = perms.hasPermission("DossierManagement", "Admin");
   const canWrite = canAdmin || perms.hasPermission("DossierManagement", "Write");
@@ -97,11 +99,11 @@ export default function L3Screen() {
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const submit = async () => {
-    if (!canWrite || submitting) return;
+  const submit = async (): Promise<ProjectDetail | null> => {
+    if (!canWrite || submitting) return null;
     if (!form.name.trim() || !form.country.trim()) {
       setError("Project name and target country are required.");
-      return;
+      return null;
     }
 
     setError(null);
@@ -126,10 +128,24 @@ export default function L3Screen() {
       setForm(initialForm(detail));
       window.history.replaceState({}, "", `${window.location.pathname}?projectId=${encodeURIComponent(detail.id)}`);
       setSuccess(persistedProject ? "Project changes saved." : `Created ${detail.name} as ${detail.id}.`);
+      return detail;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save project.");
+      return null;
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const next = async () => {
+    if (!canWrite && persistedProject) {
+      navigate(`/screen/L4?projectId=${encodeURIComponent(persistedProject.id)}`);
+      return;
+    }
+
+    const detail = await submit();
+    if (detail) {
+      navigate(`/screen/L4?projectId=${encodeURIComponent(detail.id)}`);
     }
   };
 
@@ -343,6 +359,15 @@ export default function L3Screen() {
           <Btn variant="subtle" disabled={submitting} onClick={cancel} data-id="cancel-project">Cancel</Btn>
           <Btn variant="secondary" disabled={!canWrite || submitting} onClick={submit} data-id="save-project-draft">
             Save draft
+          </Btn>
+          <Btn
+            variant="primary"
+            disabled={submitting || (!persistedProject && !canWrite)}
+            onClick={next}
+            data-id="next-project-modules"
+          >
+            Next
+            <ArrowRight size={13} />
           </Btn>
         </div>
       </div>
