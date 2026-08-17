@@ -41,7 +41,7 @@ permissions:
 jobs:
   build-api:
     name: Build & publish API
-    if: ${{ inputs.deploy_api != false }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_api != false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
 
   build-web:
     name: Build SPA
-    if: ${{ inputs.deploy_web != false }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_web != false }}
     runs-on: ubuntu-latest
     env:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
@@ -104,10 +104,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        if: ${{ inputs.deploy_api != false }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_api != false }}
         with: { name: api-package, path: ./artifacts }
       - uses: actions/download-artifact@v4
-        if: ${{ inputs.deploy_web != false }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_web != false }}
         with: { name: web-package, path: ./artifacts }
       - uses: azure/login@v2
         with:
@@ -165,7 +165,7 @@ jobs:
             -App           'web'
 
       - name: Deploy API zip (staging slot for non-dev)
-        if: ${{ inputs.deploy_api != false && env.TARGET_ENV != 'dev' }}
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.deploy_api != false) && env.TARGET_ENV != 'dev' }}
         uses: azure/webapps-deploy@v3
         with:
           app-name:       ${{ steps.lookup.outputs.api }}
@@ -174,7 +174,7 @@ jobs:
           package:        ./artifacts/api.zip
 
       - name: Deploy API zip (production slot for dev)
-        if: ${{ inputs.deploy_api != false && env.TARGET_ENV == 'dev' }}
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.deploy_api != false) && env.TARGET_ENV == 'dev' }}
         uses: azure/webapps-deploy@v3
         with:
           app-name:       ${{ steps.lookup.outputs.api }}
@@ -182,7 +182,7 @@ jobs:
           package:        ./artifacts/api.zip
 
       - name: Deploy Web zip
-        if: ${{ inputs.deploy_web != false }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_web != false }}
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ steps.lookup.outputs.web }}
@@ -206,7 +206,7 @@ jobs:
           echo "Smoke tests passed."
 
       - name: Blue/Green slot swap (non-dev)
-        if: ${{ inputs.deploy_api != false && env.TARGET_ENV != 'dev' }}
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.deploy_api != false) && env.TARGET_ENV != 'dev' }}
         run: |
           az webapp deployment slot swap \
             --resource-group "${{ steps.lookup.outputs.rg }}" \
