@@ -54,13 +54,13 @@ function initialForm(project?: ProjectDetail | null): FormState {
         owner: project.ownerDisplayName,
       }
     : {
-        name: "PX-102 · Germany · Initial submission",
-        country: "DE",
-        product: "PX-102 — Elmiravir 50 mg",
-        productVersion: "v2.1",
+        name: "",
+        country: "",
+        product: "",
+        productVersion: "",
         submissionType: "Initial",
-        targetDate: "2026-03-31",
-        owner: "Marcus Lindqvist (you)",
+        targetDate: "",
+        owner: "",
       };
 }
 
@@ -254,6 +254,7 @@ export default function L3Screen() {
               disabled={!canWrite || submitting}
               data-id="project-country"
             >
+              <option value="">Select country…</option>
               {COUNTRY_OPTIONS.map((opt) => (
                 <option key={opt.code} value={opt.code}>{opt.label}</option>
               ))}
