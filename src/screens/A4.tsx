@@ -1,14 +1,12 @@
 // A4 — Per-project source configuration. Loads /api/v1/projects/{id}/sources.
 import * as React from "react";
+import { useNavigate } from "react-router";
 import { Plus, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, Breadcrumb, ScreenCaption } from "../design/primitives";
-import { getProjectSources } from "../api/resources";
+import { getProject, getProjectSources } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 import type { ProjectSource } from "../api/types";
-
-// Wireframe demo uses the DE variant of PX-102.
-const DEMO_PROJECT_ID = "px-102-de";
 
 function sourceTypeIcon(type: string): string {
   return type === "SharePoint" ? "🔷" : "☁️";
@@ -35,15 +33,27 @@ function formatSynced(iso: string): string {
 }
 
 export default function A4Screen() {
-  const modules = useApi((sig) => getProjectSources(DEMO_PROJECT_ID, sig), []);
+  const navigate = useNavigate();
+  const [projectId] = React.useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("projectId"));
+
+  const project = useApi((sig) => projectId ? getProject(projectId, sig) : Promise.resolve(null), [projectId]);
+  const modules = useApi((sig) => projectId ? getProjectSources(projectId, sig) : Promise.resolve([]), [projectId]);
   const [expanded, setExpanded] = React.useState<string[]>(["M3", "M4", "M5"]);
   const toggleExpand = (id: string) => setExpanded(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id]);
+
+  const projectLabel = project.status === "ready" && project.data ? project.data.name : (projectId ?? "");
 
   return (
     <div style={{ padding: 24 }}>
       <ScreenCaption id="A4" persona="RALead" />
-      <Breadcrumb items={["Projects", "PX-102", "Sources"]} />
-      <h1 style={{ fontSize: 22, fontWeight: 600, color: C.text1, marginBottom: 4 }}>Project sources · PX-102</h1>
+      <Breadcrumb items={[
+        { label: "Projects", onClick: () => navigate("/screen/L2") },
+        ...(projectId ? [{ label: projectLabel, onClick: () => navigate(`/screen/L3?projectId=${encodeURIComponent(projectId)}`) }] : []),
+        "Sources",
+      ]} />
+      {!projectId && <ErrorBanner message="No project selected. Open a project from the projects list to manage its sources." style={{ marginBottom: 16 }} />}
+      <h1 style={{ fontSize: 22, fontWeight: 600, color: C.text1, marginBottom: 4 }}>Project sources{projectLabel ? ` · ${projectLabel}` : ""}</h1>
       <p style={{ fontSize: 13, color: C.text3, marginBottom: 16 }}>Configure one or more source locations per CTD module. ARA will pull documents from all sources in order.</p>
 
       <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border1}`, marginBottom: 20 }}>

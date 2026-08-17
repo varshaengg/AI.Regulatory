@@ -1,7 +1,7 @@
 // L2 — Dossier projects catalogue. Loads project list from /api/v1/projects.
 import * as React from "react";
 import { useNavigate } from "react-router";
-import { Search, MoreHorizontal, Plus, Grid, List } from "lucide-react";
+import { Search, MoreHorizontal, Plus, Grid, List, Database } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
 import { listProjects } from "../api/resources";
@@ -108,7 +108,19 @@ export default function L2Screen() {
                 </td>
                 <td style={td}><Chip color={statusChip(row.status)}>{row.status}</Chip></td>
                 <td style={{ ...td, color: C.text3 }}>{new Date(row.createdAt).toISOString().slice(0, 10)}</td>
-                <td style={td}><MoreHorizontal size={14} color={C.text3} /></td>
+                <td style={td}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/screen/A4?projectId=${encodeURIComponent(row.id)}`)}
+                    aria-label={`Manage sources for ${row.name}`}
+                    title="Manage sources"
+                    data-id={`project-sources-${row.id}`}
+                    style={{ padding: 4, border: "none", background: "none", cursor: "pointer", display: "inline-flex" }}
+                  >
+                    <Database size={14} color={C.text3} />
+                  </button>
+                  <MoreHorizontal size={14} color={C.text3} />
+                </td>
               </tr>
             ))}
           </tbody>

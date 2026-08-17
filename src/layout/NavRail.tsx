@@ -42,7 +42,7 @@ export function NavRail({ activeScreen, style }: { activeScreen: string; style?:
             padding: "0 16px 4px", fontSize: "11px", fontWeight: 700,
             textTransform: "uppercase", letterSpacing: "0.06em", color: C.text3,
           }}>{group.label}</div>
-          {group.items.map(item => {
+          {group.items.filter(item => !item.hidden).map(item => {
             const isActive = item.id === activeScreen;
             return (
               <Link

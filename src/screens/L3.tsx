@@ -348,7 +348,18 @@ export default function L3Screen() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 24 }}>
-        <div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {persistedProject && (
+            <Btn
+              variant="subtle"
+              disabled={submitting}
+              onClick={() => navigate(`/screen/A4?projectId=${encodeURIComponent(persistedProject.id)}`)}
+              data-id="manage-project-sources"
+            >
+              <FileText size={13} />
+              Manage sources
+            </Btn>
+          )}
           {canAdmin && persistedProject && (
             <Btn variant="subtle" disabled={submitting} onClick={archive} data-id="archive-project">
               <Archive size={13} />

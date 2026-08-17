@@ -59,6 +59,7 @@ function firstAllowedScreenId(
   for (const group of navGroups) {
     if (group.featureCode && !hasAny(group.featureCode)) continue;
     for (const item of group.items) {
+      if (item.hidden) continue;
       const feature = item.featureCode ?? group.featureCode;
       if (!feature) return item.id;
       if (item.requiredVerb) {

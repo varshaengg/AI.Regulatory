@@ -64,6 +64,8 @@ export const navGroups: {
     star?: 1 | 2;
     featureCode?: string;
     requiredVerb?: "Read" | "Write" | "Review" | "Admin";
+    /** True to keep permission gating without showing this item in the left nav rail. */
+    hidden?: boolean;
   }[];
 }[] = [
   { label: "Admin", featureCode: undefined, items: [
@@ -76,7 +78,7 @@ export const navGroups: {
   { label: "RA Lead", featureCode: "DossierManagement", items: [
     { id: "L1", label: "Home dashboard", requiredVerb: "Read" },
     { id: "L2", label: "Projects list", requiredVerb: "Read" },
-    { id: "A4", label: "Project sources", requiredVerb: "Write" },
+    { id: "A4", label: "Project sources", requiredVerb: "Write", hidden: true },
     { id: "L3", label: "New dossier · Basics", requiredVerb: "Write" },
     { id: "L4", label: "New dossier · Modules", star: 1, requiredVerb: "Write" },
     { id: "L5", label: "New dossier · Launch", requiredVerb: "Write" },

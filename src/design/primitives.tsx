@@ -145,17 +145,31 @@ export function Stepper({ steps, active }: { steps: string[]; active: number }) 
   );
 }
 
-export function Breadcrumb({ items }: { items: string[] }) {
+type BreadcrumbItem = string | { label: string; onClick?: () => void };
+
+export function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", marginBottom: "12px" }}>
-      {items.map((item, i) => (
-        <span key={i} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          {i < items.length - 1
-            ? <span style={{ color: C.brand, cursor: "pointer" }}>{item}</span>
-            : <span style={{ color: C.text1, fontWeight: 600 }}>{item}</span>}
-          {i < items.length - 1 && <ChevronRight size={12} color={C.text3} />}
-        </span>
-      ))}
+      {items.map((raw, i) => {
+        const item = typeof raw === "string" ? { label: raw, onClick: undefined } : raw;
+        const isLast = i === items.length - 1;
+        return (
+          <span key={i} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            {!isLast && item.onClick
+              ? (
+                <button
+                  type="button"
+                  onClick={item.onClick}
+                  style={{ color: C.brand, cursor: "pointer", background: "none", border: "none", padding: 0, font: "inherit" }}
+                >{item.label}</button>
+              )
+              : !isLast
+                ? <span style={{ color: C.brand, cursor: "pointer" }}>{item.label}</span>
+                : <span style={{ color: C.text1, fontWeight: 600 }}>{item.label}</span>}
+            {!isLast && <ChevronRight size={12} color={C.text3} />}
+          </span>
+        );
+      })}
     </div>
   );
 }
