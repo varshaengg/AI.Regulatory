@@ -112,6 +112,28 @@ export function FSelect({ label, value }: { label?: string; value: string }) {
   );
 }
 
+export function ProgressBar({ label, style }: { label?: string; style?: React.CSSProperties }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, ...style }}>
+      {label && <span style={{ fontSize: 12, color: C.text3, fontStyle: "italic" }}>{label}</span>}
+      <div style={{ position: "relative", height: 4, borderRadius: 2, backgroundColor: C.bg3, overflow: "hidden" }}>
+        <div
+          style={{
+            position: "absolute", top: 0, bottom: 0, width: "40%", borderRadius: 2,
+            backgroundColor: C.brand, animation: "ara-progress-indeterminate 1.1s ease-in-out infinite",
+          }}
+        />
+      </div>
+      <style>{`
+        @keyframes ara-progress-indeterminate {
+          0% { left: -40%; }
+          100% { left: 100%; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export function Stepper({ steps, active }: { steps: string[]; active: number }) {
   return (
     <div style={{ display: "flex", alignItems: "center" }}>

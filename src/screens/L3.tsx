@@ -3,10 +3,10 @@ import * as React from "react";
 import { useNavigate } from "react-router";
 import { Archive, ArrowRight, FileText } from "lucide-react";
 import { C } from "../design/tokens";
-import { Btn, Chip, Card, Stepper, ScreenCaption } from "../design/primitives";
+import { Btn, Chip, Card, Stepper, ScreenCaption, ProgressBar } from "../design/primitives";
 import { archiveProject, createProject, getProject, updateProject } from "../api/resources";
 import { usePermissions } from "../api/usePermissions";
-import { ErrorBanner, LoadingLabel, useApi } from "../api/useApi";
+import { ErrorBanner, useApi } from "../api/useApi";
 import type { ProjectDetail } from "../api/types";
 
 type FormState = {
@@ -95,6 +95,10 @@ export default function L3Screen() {
       setPersistedProject(null);
     }
   }, [activeProjectId, hydratedProjectId, project]);
+
+  // While an existing project is being loaded, keep the form hidden behind a
+  // progress bar instead of briefly showing blank/default field values.
+  const isHydrating = Boolean(activeProjectId) && project.status !== "error" && hydratedProjectId !== activeProjectId;
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -206,12 +210,15 @@ export default function L3Screen() {
         <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: C.text1 }}>Project details</h3>
-            {project.status === "loading" && <LoadingLabel>Loading existing project…</LoadingLabel>}
             {project.status === "ready" && project.data && (
               <Chip color="brand">Loaded from API · {project.data.id}</Chip>
             )}
           </div>
 
+          {isHydrating ? (
+            <ProgressBar label="Loading project details…" />
+          ) : (
+          <>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Project name</label>
             <input
@@ -309,6 +316,8 @@ export default function L3Screen() {
               data-id="project-owner"
             />
           </div>
+          </>
+          )}
         </Card>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -334,7 +343,7 @@ export default function L3Screen() {
               This will create the lifecycle root record and hand off to module setup.
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <Btn variant="primary" disabled={!canWrite || submitting} onClick={submit} data-id="save-project">
+              <Btn variant="primary" disabled={!canWrite || submitting || isHydrating} onClick={submit} data-id="save-project">
                 <ArrowRight size={13} />
                 {submitting ? "Saving…" : persistedProject ? "Save changes" : "Create project"}
               </Btn>
@@ -369,12 +378,12 @@ export default function L3Screen() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn variant="subtle" disabled={submitting} onClick={cancel} data-id="cancel-project">Cancel</Btn>
-          <Btn variant="secondary" disabled={!canWrite || submitting} onClick={submit} data-id="save-project-draft">
+          <Btn variant="secondary" disabled={!canWrite || submitting || isHydrating} onClick={submit} data-id="save-project-draft">
             Save draft
           </Btn>
           <Btn
             variant="primary"
-            disabled={submitting || (!persistedProject && !canWrite)}
+            disabled={submitting || isHydrating || (!persistedProject && !canWrite)}
             onClick={next}
             data-id="next-project-modules"
           >
