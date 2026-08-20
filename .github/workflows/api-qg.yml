@@ -1,0 +1,67 @@
+# =============================================================================
+# ARA — API Quality Gate (GitHub Actions)
+# Runs only on pull requests that touch the .NET API codebase. Restores,
+# builds (Release, warnings as errors), checks for known-vulnerable/
+# deprecated NuGet packages, and runs unit tests if a test project exists.
+# Does not deploy anything — this is a PR gate only.
+# =============================================================================
+name: ARA API QG
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'api/**'
+      - '.github/workflows/api-qg.yml'
+
+concurrency:
+  group: api-qg-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    name: Build and vulnerability checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+
+      - name: dotnet restore
+        run: dotnet restore api/src/AI.Regulatory.API/AI.Regulatory.API.csproj
+
+      - name: dotnet build (Release, warnings as errors)
+        run: |
+          dotnet build api/src/AI.Regulatory.API/AI.Regulatory.API.csproj \
+            -c Release --no-restore -warnaserror
+
+      - name: Check for vulnerable / deprecated NuGet packages
+        run: |
+          set -e
+          echo "== Vulnerable packages =="
+          dotnet list api/src/AI.Regulatory.API/AI.Regulatory.API.csproj package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::warning::Vulnerable NuGet package(s) detected (see log). Not yet a hard gate — pre-existing transitive vulnerabilities exist in this repo that predate this workflow."
+          fi
+          echo "== Deprecated packages =="
+          dotnet list api/src/AI.Regulatory.API/AI.Regulatory.API.csproj package --deprecated | tee deprecated.txt
+          if grep -q "has the following deprecated packages" deprecated.txt; then
+            echo "::warning::Deprecated NuGet package(s) detected — see log above."
+          fi
+
+      - name: Run unit tests (if a test project exists)
+        run: |
+          set -e
+          TEST_PROJECTS=$(find api -type f -name "*.Tests.csproj" 2>/dev/null || true)
+          if [ -z "$TEST_PROJECTS" ]; then
+            echo "No *.Tests.csproj found under api/ — skipping test step."
+            exit 0
+          fi
+          for proj in $TEST_PROJECTS; do
+            echo "Running tests: $proj"
+            dotnet test "$proj" -c Release --no-restore --logger "trx"
+          done
