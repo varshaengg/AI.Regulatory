@@ -101,6 +101,33 @@ export interface ProjectSourcesByModule {
   sources: ProjectSource[];
 }
 
+export interface CreateProjectSourceRequest {
+  moduleId: string;
+  label: string;
+  path: string;
+  type: "Azure Blob" | "SharePoint";
+}
+
+export interface UpdateProjectSourceRequest {
+  label: string;
+  path: string;
+  type: "Azure Blob" | "SharePoint";
+}
+
+export interface TestSourceConnectionRequest {
+  type: "Azure Blob" | "SharePoint";
+  path: string;
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  status: "ok" | "warning" | "error";
+  message: string;
+  itemsFound: number | null;
+  durationMs: number;
+  testedAt: string;
+}
+
 // ─── Modules & sub-modules — L4 ─────────────────────────────────────────────
 export interface CtdModule {
   id: string;

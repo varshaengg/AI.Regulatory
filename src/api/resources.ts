@@ -6,7 +6,9 @@ import type {
   Page,
   ProjectSummary, ProjectDetail, CreateProjectRequest, UpdateProjectRequest,
   CtdTemplate,
-  ProjectSourcesByModule,
+  ProjectSourcesByModule, ProjectSource,
+  CreateProjectSourceRequest, UpdateProjectSourceRequest,
+  TestSourceConnectionRequest, ConnectionTestResult,
   CtdModule, SubModule,
   Assignment,
   Comment,
@@ -40,6 +42,16 @@ export const listTemplates = (signal?: AbortSignal) =>
 export const getProjectSources = (projectId: string, signal?: AbortSignal) =>
   api.get<ProjectSourcesByModule[]>(
     `/projects/${encodeURIComponent(projectId)}/sources`, undefined, signal);
+export const createProjectSource = (projectId: string, body: CreateProjectSourceRequest, signal?: AbortSignal) =>
+  api.post<ProjectSource>(`/projects/${encodeURIComponent(projectId)}/sources`, body, signal);
+export const updateProjectSource = (projectId: string, id: number, body: UpdateProjectSourceRequest, signal?: AbortSignal) =>
+  api.patch<ProjectSource>(`/projects/${encodeURIComponent(projectId)}/sources/${id}`, body, undefined, signal);
+export const deleteProjectSource = (projectId: string, id: number, signal?: AbortSignal) =>
+  api.del<void>(`/projects/${encodeURIComponent(projectId)}/sources/${id}`, signal);
+export const testProjectSourceCandidate = (projectId: string, body: TestSourceConnectionRequest, signal?: AbortSignal) =>
+  api.post<ConnectionTestResult>(`/projects/${encodeURIComponent(projectId)}/sources/test`, body, signal);
+export const testProjectSource = (projectId: string, id: number, signal?: AbortSignal) =>
+  api.post<ConnectionTestResult>(`/projects/${encodeURIComponent(projectId)}/sources/${id}/test`, undefined, signal);
 
 // Modules & sub-modules
 export const listModules = (signal?: AbortSignal) =>

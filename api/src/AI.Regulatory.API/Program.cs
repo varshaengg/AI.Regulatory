@@ -37,6 +37,7 @@ builder.Services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
 builder.Services.AddSingleton<ProjectsRepository>();
 builder.Services.AddSingleton<TemplatesRepository>();
 builder.Services.AddSingleton<ProjectSourcesRepository>();
+builder.Services.AddSingleton<ISourceConnectivityValidator, SourceConnectivityValidator>();
 builder.Services.AddSingleton<SubModulesRepository>();
 builder.Services.AddSingleton<AssignmentsRepository>();
 builder.Services.AddSingleton<CommentsRepository>();

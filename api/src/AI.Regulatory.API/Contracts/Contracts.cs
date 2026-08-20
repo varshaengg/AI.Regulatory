@@ -111,6 +111,34 @@ public sealed record ProjectSourcesByModule(
     string Color,
     IReadOnlyList<ProjectSource> Sources);
 
+public sealed record CreateProjectSourceRequest(
+    string ModuleId,
+    string Label,
+    string Path,
+    string Type);          // Azure Blob | SharePoint
+
+public sealed record UpdateProjectSourceRequest(
+    string Label,
+    string Path,
+    string Type);           // Azure Blob | SharePoint
+
+/// <summary>Candidate connection check performed before a source is saved (SDD §4.4 FR-010).</summary>
+public sealed record TestSourceConnectionRequest(
+    string Type,
+    string Path);
+
+/// <summary>
+/// Result of a connectivity probe — SDD §4.4 FR-010: (a) path/permission check,
+/// (b) list first N items, (c) round-trip in &lt;= 10s.
+/// </summary>
+public sealed record ConnectionTestResult(
+    bool Success,
+    string Status,          // ok | warning | error
+    string Message,
+    int? ItemsFound,
+    int DurationMs,
+    DateTime TestedAt);
+
 
 // ─── Modules & sub-modules — L4, L5 ───────────────────────────────────────────
 

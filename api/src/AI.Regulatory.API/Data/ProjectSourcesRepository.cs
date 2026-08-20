@@ -1,3 +1,4 @@
+using System.Globalization;
 using AI.Regulatory.API.Contracts;
 using Dapper;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,116 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
             m.Id, m.Label, m.Color,
             mine.Where(s => s.ModuleId == m.Id).ToArray())).ToArray();
     }
+
+    public override Task<ProjectSource> AddAsync(ProjectSource item, CancellationToken ct = default)
+    {
+        if (!IsMocked)
+            return base.AddAsync(item, ct);
+
+        var nextId = SeedList.Select(s => s.Id).DefaultIfEmpty().Max() + 1;
+        return base.AddAsync(item with { Id = nextId }, ct);
+    }
+
+    /// <summary>Edit label/path/type for an existing source (scoped to its project).</summary>
+    public async Task<ProjectSource?> UpdateAsync(string projectId, string id, UpdateProjectSourceRequest request, CancellationToken ct)
+    {
+        if (IsMocked)
+        {
+            var existing = SeedList.FirstOrDefault(s => MatchesId(s, id) && SameProject(s, projectId));
+            if (existing is null) return null;
+
+            var updated = existing with
+            {
+                Label = request.Label.Trim(),
+                Path = request.Path.Trim(),
+                Type = request.Type.Trim(),
+            };
+            SeedList.Remove(existing);
+            SeedList.Add(updated);
+            return updated;
+        }
+
+        if (!int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var intId))
+            return null;
+
+        var projectGuid = await ResolveProjectGuidAsync(projectId, ct);
+        if (projectGuid is null) return null;
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE [dbo].[ProjectSource]
+            SET [Label] = @Label, [Path] = @Path, [Type] = @Type
+            WHERE [Id] = @Id AND [ProjectId] = @ProjectGuid;
+            """,
+            new
+            {
+                Id = intId,
+                Label = request.Label.Trim(),
+                Path = request.Path.Trim(),
+                Type = request.Type.Trim(),
+                ProjectGuid = projectGuid,
+            },
+            cancellationToken: ct));
+
+        return rows == 0 ? null : await GetFromStoreAsync(id, ct);
+    }
+
+    /// <summary>Persist the outcome of a connectivity probe (status + last-synced timestamp).</summary>
+    public async Task<ProjectSource?> SetTestResultAsync(string projectId, string id, ConnectionTestResult result, CancellationToken ct)
+    {
+        if (IsMocked)
+        {
+            var existing = SeedList.FirstOrDefault(s => MatchesId(s, id) && SameProject(s, projectId));
+            if (existing is null) return null;
+
+            var updated = existing with { Status = result.Status, SyncedAt = result.TestedAt };
+            SeedList.Remove(existing);
+            SeedList.Add(updated);
+            return updated;
+        }
+
+        if (!int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var intId))
+            return null;
+
+        var projectGuid = await ResolveProjectGuidAsync(projectId, ct);
+        if (projectGuid is null) return null;
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE [dbo].[ProjectSource]
+            SET [Status] = @Status, [SyncedAt] = @SyncedAt
+            WHERE [Id] = @Id AND [ProjectId] = @ProjectGuid;
+            """,
+            new { Id = intId, Status = result.Status, SyncedAt = result.TestedAt, ProjectGuid = projectGuid },
+            cancellationToken: ct));
+
+        return rows == 0 ? null : await GetFromStoreAsync(id, ct);
+    }
+
+    /// <summary>Remove a source (scoped to its project so callers can't cross project boundaries).</summary>
+    public async Task<bool> DeleteAsync(string projectId, string id, CancellationToken ct)
+    {
+        if (IsMocked)
+            return SeedList.RemoveAll(s => MatchesId(s, id) && SameProject(s, projectId)) > 0;
+
+        if (!int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var intId))
+            return false;
+
+        var projectGuid = await ResolveProjectGuidAsync(projectId, ct);
+        if (projectGuid is null) return false;
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM [dbo].[ProjectSource] WHERE [Id] = @Id AND [ProjectId] = @ProjectGuid;",
+            new { Id = intId, ProjectGuid = projectGuid },
+            cancellationToken: ct));
+        return rows > 0;
+    }
+
+    private static bool SameProject(ProjectSource item, string projectId)
+        => string.Equals(item.ProjectId, projectId, StringComparison.OrdinalIgnoreCase);
 
     protected override IEnumerable<ProjectSource> SeedData() => new[]
     {
@@ -66,6 +177,44 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
             WHERE ps.[Id] = @intId;
             """,
             new { intId }, cancellationToken: ct));
+    }
+
+    protected override async Task<ProjectSource> AddToStoreAsync(ProjectSource item, CancellationToken ct)
+    {
+        var projectGuid = await ResolveProjectGuidAsync(item.ProjectId, ct)
+            ?? throw new InvalidOperationException($"Project '{item.ProjectId}' not found.");
+
+        await using var c = await _sql.OpenAsync(ct);
+        const string insertSql = """
+            INSERT INTO [dbo].[ProjectSource] ([ProjectId], [ModuleId], [Label], [Path], [Type], [SyncedAt], [Status])
+            OUTPUT INSERTED.[Id]
+            VALUES (@ProjectId, @ModuleId, @Label, @Path, @Type, @SyncedAt, @Status);
+            """;
+
+        var newId = await c.ExecuteScalarAsync<int>(new CommandDefinition(insertSql, new
+        {
+            ProjectId = projectGuid,
+            item.ModuleId,
+            item.Label,
+            item.Path,
+            item.Type,
+            item.SyncedAt,
+            item.Status,
+        }, cancellationToken: ct));
+
+        return await GetFromStoreAsync(newId.ToString(CultureInfo.InvariantCulture), ct)
+            ?? throw new InvalidOperationException($"Failed to read back source {newId}.");
+    }
+
+    private async Task<Guid?> ResolveProjectGuidAsync(string projectId, CancellationToken ct)
+    {
+        if (!int.TryParse(projectId, NumberStyles.None, CultureInfo.InvariantCulture, out var projectNumber))
+            return null;
+
+        await using var c = await _sql.OpenAsync(ct);
+        return await c.ExecuteScalarAsync<Guid?>(new CommandDefinition(
+            "SELECT [Id] FROM [dbo].[Project] WHERE [ProjectNumber] = @projectNumber;",
+            new { projectNumber }, cancellationToken: ct));
     }
 
     private static DateTime D(int daysOffset, int h, int m)
