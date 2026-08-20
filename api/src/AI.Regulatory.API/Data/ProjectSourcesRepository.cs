@@ -179,7 +179,8 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
         var rows = await c.QueryAsync<ProjectSource>(new CommandDefinition(
             """
             SELECT ps.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId],
-                   ps.[ModuleId], ps.[Label], ps.[Path], ps.[Type], ps.[SyncedAt], ps.[Status]
+                   ps.[ModuleId], ps.[Label], ps.[Path], ps.[Type], ps.[SyncedAt], ps.[Status],
+                   CAST(0 AS BIT) AS [IsDefault]
             FROM [dbo].[ProjectSource] ps
             JOIN [dbo].[Project] p ON p.[Id] = ps.[ProjectId]
             ORDER BY p.[ProjectNumber], ps.[ModuleId], ps.[Id];
@@ -197,7 +198,8 @@ public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
         return await c.QuerySingleOrDefaultAsync<ProjectSource>(new CommandDefinition(
             """
             SELECT ps.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId],
-                   ps.[ModuleId], ps.[Label], ps.[Path], ps.[Type], ps.[SyncedAt], ps.[Status]
+                   ps.[ModuleId], ps.[Label], ps.[Path], ps.[Type], ps.[SyncedAt], ps.[Status],
+                   CAST(0 AS BIT) AS [IsDefault]
             FROM [dbo].[ProjectSource] ps
             JOIN [dbo].[Project] p ON p.[Id] = ps.[ProjectId]
             WHERE ps.[Id] = @intId;
