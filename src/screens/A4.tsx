@@ -84,6 +84,13 @@ export default function A4Screen() {
     setFormCandidateTest(null);
     setFormError(null);
   };
+  const openOverride = (src: ProjectSource) => {
+    // Prefill with the tenant default so the RA Lead can tweak just what's needed,
+    // but save as a brand-new project-scoped source (replace semantics).
+    setForm({ moduleId: src.moduleId, editingId: null, label: src.label, path: src.path, type: src.type as SourceType });
+    setFormCandidateTest(null);
+    setFormError(null);
+  };
   const closeForm = () => { setForm(null); setFormCandidateTest(null); setFormError(null); };
 
   const runCandidateTest = async () => {
@@ -220,6 +227,25 @@ export default function A4Screen() {
                         const st = statusDot(src.status);
                         const testResult = rowResults[src.id];
                         const busy = rowBusyId === src.id;
+                        if (src.isDefault) {
+                          return (
+                            <div key={`default-${src.moduleId}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px 10px 60px", backgroundColor: "white" }}>
+                              <span style={{ fontSize: 14, flexShrink: 0 }}>{sourceTypeIcon(src.type)}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: C.text1 }}>{src.label}</div>
+                                <div style={{ fontSize: 11, color: C.text3, fontFamily: "monospace", marginTop: 2 }}>{src.type} · {src.path}</div>
+                              </div>
+                              <Chip color="neutral">Default (tenant)</Chip>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: st.color, flexShrink: 0 }}>
+                                <div style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: st.color }} />
+                                {st.label}
+                              </div>
+                              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                <Btn variant="subtle" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => openOverride(src)}>Override</Btn>
+                              </div>
+                            </div>
+                          );
+                        }
                         return (
                           <div key={src.id}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px 10px 60px", borderBottom: (si < mod.sources.length - 1 || testResult) ? `1px solid ${C.border1}` : "none", backgroundColor: "white" }}>

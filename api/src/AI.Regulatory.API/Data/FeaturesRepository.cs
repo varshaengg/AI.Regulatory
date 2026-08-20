@@ -23,6 +23,7 @@ public sealed class FeaturesRepository : BaseRepository<Feature>
         new Feature("Assignments",       "Assignments",        "Regulatory",     40),
         new Feature("Reviews",           "Reviews",            "Regulatory",     50),
         new Feature("Notifications",     "Notifications",      "Platform",       60),
+        new Feature("GlobalSources",     "Global Sources",     "Administration", 70),
     };
 
     private const string SelectClause =

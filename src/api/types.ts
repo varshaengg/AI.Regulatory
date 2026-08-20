@@ -92,6 +92,7 @@ export interface ProjectSource {
   type: "Azure Blob" | "SharePoint" | string;
   syncedAt: string;
   status: "ok" | "warning" | "error";
+  isDefault?: boolean;
 }
 
 export interface ProjectSourcesByModule {
@@ -126,6 +127,30 @@ export interface ConnectionTestResult {
   itemsFound: number | null;
   durationMs: number;
   testedAt: string;
+}
+
+// ─── Global (tenant) default sources — A7 (Admin) ───────────────────────────
+export interface GlobalSource {
+  id: number;
+  moduleId: string;
+  label: string;
+  path: string;
+  type: "Azure Blob" | "SharePoint" | string;
+  syncedAt: string;
+  status: "ok" | "warning" | "error";
+}
+
+export interface GlobalSourceModuleEntry {
+  moduleId: string;
+  label: string;
+  color: string;
+  source: GlobalSource | null;
+}
+
+export interface UpsertGlobalSourceRequest {
+  label: string;
+  path: string;
+  type: "Azure Blob" | "SharePoint";
 }
 
 // ─── Modules & sub-modules — L4 ─────────────────────────────────────────────

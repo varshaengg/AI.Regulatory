@@ -9,6 +9,7 @@ import type {
   ProjectSourcesByModule, ProjectSource,
   CreateProjectSourceRequest, UpdateProjectSourceRequest,
   TestSourceConnectionRequest, ConnectionTestResult,
+  GlobalSourceModuleEntry, UpsertGlobalSourceRequest,
   CtdModule, SubModule,
   Assignment,
   Comment,
@@ -52,6 +53,18 @@ export const testProjectSourceCandidate = (projectId: string, body: TestSourceCo
   api.post<ConnectionTestResult>(`/projects/${encodeURIComponent(projectId)}/sources/test`, body, signal);
 export const testProjectSource = (projectId: string, id: number, signal?: AbortSignal) =>
   api.post<ConnectionTestResult>(`/projects/${encodeURIComponent(projectId)}/sources/${id}/test`, undefined, signal);
+
+// Global (tenant) default sources — A7 (Admin)
+export const listGlobalSources = (signal?: AbortSignal) =>
+  api.get<GlobalSourceModuleEntry[]>("/admin/sources", undefined, signal);
+export const upsertGlobalSource = (moduleId: string, body: UpsertGlobalSourceRequest, signal?: AbortSignal) =>
+  api.put<GlobalSourceModuleEntry["source"]>(`/admin/sources/${encodeURIComponent(moduleId)}`, body, signal);
+export const deleteGlobalSource = (moduleId: string, signal?: AbortSignal) =>
+  api.del<void>(`/admin/sources/${encodeURIComponent(moduleId)}`, signal);
+export const testGlobalSourceCandidate = (body: TestSourceConnectionRequest, signal?: AbortSignal) =>
+  api.post<ConnectionTestResult>("/admin/sources/test", body, signal);
+export const testGlobalSource = (moduleId: string, signal?: AbortSignal) =>
+  api.post<ConnectionTestResult>(`/admin/sources/${encodeURIComponent(moduleId)}/test`, undefined, signal);
 
 // Modules & sub-modules
 export const listModules = (signal?: AbortSignal) =>

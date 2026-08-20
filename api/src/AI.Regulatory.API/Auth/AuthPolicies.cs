@@ -14,6 +14,8 @@ public static class AuthPolicies
     public const string UserManagementAdmin = "UserManagementAdmin";
     public const string TemplatesRead       = "TemplatesRead";
     public const string TemplatesAdmin      = "TemplatesAdmin";
+    public const string GlobalSourcesRead   = "GlobalSourcesRead";
+    public const string GlobalSourcesAdmin  = "GlobalSourcesAdmin";
     public const string DossierManagementRead  = "DossierManagementRead";
     public const string DossierManagementWrite = "DossierManagementWrite";
     public const string DossierManagementReview = "DossierManagementReview";

@@ -103,7 +103,8 @@ public sealed record ProjectSource(
     string Path,
     string Type,          // Azure Blob | SharePoint
     DateTime SyncedAt,
-    string Status);       // ok | warning | error
+    string Status,        // ok | warning | error
+    bool IsDefault = false); // true when this row is the tenant-wide GlobalSource, not yet overridden for this project
 
 public sealed record ProjectSourcesByModule(
     string ModuleId,
@@ -138,6 +139,26 @@ public sealed record ConnectionTestResult(
     int? ItemsFound,
     int DurationMs,
     DateTime TestedAt);
+
+
+// ─── Global (tenant) default sources — A7, admin-configured ───────────────────
+// One default per CTD module. A project acquires its own ProjectSource row only
+// when RA Lead explicitly overrides the tenant default (SDD gap: global default
+// + project override was not in the original User Story 9 scope).
+
+public sealed record GlobalSource(
+    int Id,
+    string ModuleId,
+    string Label,
+    string Path,
+    string Type,           // Azure Blob | SharePoint
+    DateTime SyncedAt,
+    string Status);        // ok | warning | error
+
+public sealed record UpsertGlobalSourceRequest(
+    string Label,
+    string Path,
+    string Type);           // Azure Blob | SharePoint
 
 
 // ─── Modules & sub-modules — L4, L5 ───────────────────────────────────────────

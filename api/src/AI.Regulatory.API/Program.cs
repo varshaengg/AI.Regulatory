@@ -36,6 +36,7 @@ builder.Services.Configure<DataOptions>(builder.Configuration.GetSection(DataOpt
 builder.Services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
 builder.Services.AddSingleton<ProjectsRepository>();
 builder.Services.AddSingleton<TemplatesRepository>();
+builder.Services.AddSingleton<GlobalSourcesRepository>();
 builder.Services.AddSingleton<ProjectSourcesRepository>();
 builder.Services.AddSingleton<ISourceConnectivityValidator, SourceConnectivityValidator>();
 builder.Services.AddSingleton<SubModulesRepository>();
@@ -122,6 +123,15 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AuthPolicies.TemplatesAdmin, p =>
         p.RequireAssertion(ctx =>
             ctx.User.IsInRole("admin") || HasPermission(ctx.User, "Templates", "Admin")));
+
+    options.AddPolicy(AuthPolicies.GlobalSourcesRead, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin")
+            || HasPermission(ctx.User, "GlobalSources", "Read")
+            || HasPermission(ctx.User, "GlobalSources", "Admin")));
+    options.AddPolicy(AuthPolicies.GlobalSourcesAdmin, p =>
+        p.RequireAssertion(ctx =>
+            ctx.User.IsInRole("admin") || HasPermission(ctx.User, "GlobalSources", "Admin")));
 
     options.AddPolicy(AuthPolicies.DossierManagementRead, p =>
         p.RequireAssertion(ctx =>

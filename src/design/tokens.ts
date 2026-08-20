@@ -39,6 +39,7 @@ export const screenConfig: Record<string, { title: string; persona: PersonaKey; 
   A4: { title: "Project Sources", persona: "RALead", intent: "Map default source storage locations to each CTD module — project-specific settings owned by the RA Lead." },
   A5: { title: "User Management", persona: "Admin", intent: "Manage tenant users and their persona assignments. People-picker sources are scoped to the customer AD tenant only (SDD §4.1)." },
   A6: { title: "Permission Matrix", persona: "Admin", intent: "Configure per-persona feature permissions (Read / Write / Review / Admin). Drives left-nav visibility and in-screen action gating via /me/permissions." },
+  A7: { title: "Global Source Configuration", persona: "Admin", intent: "Set the tenant-wide default source per CTD module. Used automatically for module analysis unless an RA Lead overrides it for a specific project." },
   L1: { title: "Home Dashboard", persona: "RALead", intent: "Command centre showing active run status, assignments, and notifications at a glance." },
   L2: { title: "Projects List", persona: "RALead", intent: "Filterable catalogue of all dossier projects with progress bars and status chips." },
   L3: { title: "New Dossier · Basics", persona: "RALead", intent: "Wizard step 1 captures product, country, submission type, and owner metadata." },
@@ -74,6 +75,7 @@ export const navGroups: {
     { id: "A3", label: "Upload template", featureCode: "Templates", requiredVerb: "Admin" },
     { id: "A5", label: "User management", featureCode: "UserManagement", requiredVerb: "Read" },
     { id: "A6", label: "Permission matrix", featureCode: "UserManagement", requiredVerb: "Admin" },
+    { id: "A7", label: "Global sources", featureCode: "GlobalSources", requiredVerb: "Read" },
   ]},
   { label: "RA Lead", featureCode: "DossierManagement", items: [
     { id: "L1", label: "Home dashboard", requiredVerb: "Read" },

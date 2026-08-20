@@ -44,6 +44,7 @@ public sealed class PermissionMatrixRepository : BaseRepository<PermissionMatrix
             ("Admin", "Assignments",       "Admin"),
             ("Admin", "Reviews",           "Admin"),
             ("Admin", "Notifications",     "Admin"),
+            ("Admin", "GlobalSources",     "Admin"),
             // RA Lead
             ("RaLead", "DossierManagement", "Read"),
             ("RaLead", "DossierManagement", "Write"),

@@ -56,7 +56,8 @@ USING (VALUES
     ('Templates',         'Templates',          'Regulatory',      30),
     ('Assignments',       'Assignments',        'Regulatory',      40),
     ('Reviews',           'Reviews',            'Regulatory',      50),
-    ('Notifications',     'Notifications',      'Platform',        60)
+    ('Notifications',     'Notifications',      'Platform',        60),
+    ('GlobalSources',     'Global Sources',     'Administration',  70)
 ) AS src ([Code], [Name], [Category], [SortOrder])
     ON tgt.[Code] = src.[Code]
 WHEN MATCHED THEN
@@ -81,6 +82,7 @@ WHEN NOT MATCHED BY TARGET THEN
         ('Admin',      'Assignments',       'Admin'),
         ('Admin',      'Reviews',           'Admin'),
         ('Admin',      'Notifications',     'Admin'),
+        ('Admin',      'GlobalSources',     'Admin'),
         -- RA Lead
         ('RaLead',     'DossierManagement', 'Read'),
         ('RaLead',     'DossierManagement', 'Write'),

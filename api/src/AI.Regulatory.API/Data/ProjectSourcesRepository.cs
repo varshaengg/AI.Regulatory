@@ -9,21 +9,47 @@ namespace AI.Regulatory.API.Data;
 public sealed class ProjectSourcesRepository : BaseRepository<ProjectSource>
 {
     private readonly ISqlConnectionFactory _sql;
+    private readonly GlobalSourcesRepository _globalSources;
 
-    public ProjectSourcesRepository(IOptions<DataOptions> options, ISqlConnectionFactory sql)
-        : base(options) => _sql = sql;
+    public ProjectSourcesRepository(IOptions<DataOptions> options, ISqlConnectionFactory sql, GlobalSourcesRepository globalSources)
+        : base(options)
+    {
+        _sql = sql;
+        _globalSources = globalSources;
+    }
 
     protected override bool MatchesId(ProjectSource item, string id)
         => item.Id.ToString() == id;
 
-    /// <summary>Group all sources for a project by module for the A4 UI.</summary>
+    /// <summary>
+    /// Group all sources for a project by module for the A4 UI. A module with no
+    /// project-specific source falls back to the tenant-wide <see cref="GlobalSource"/>
+    /// default (flagged <c>IsDefault = true</c>, <c>Id = 0</c> so the UI knows to offer
+    /// "Override" instead of Edit/Test/Remove — replace semantics: once a project has
+    /// its own row for a module, the global default is no longer shown for it).
+    /// </summary>
     public async Task<IReadOnlyList<ProjectSourcesByModule>> ByProjectAsync(string projectId, CancellationToken ct)
     {
         var all = await ListAsync(ct);
         var mine = all.Where(s => string.Equals(s.ProjectId, projectId, StringComparison.OrdinalIgnoreCase)).ToList();
-        return CtdModuleCatalog.All.Select(m => new ProjectSourcesByModule(
-            m.Id, m.Label, m.Color,
-            mine.Where(s => s.ModuleId == m.Id).ToArray())).ToArray();
+        var defaults = await _globalSources.ListAsync(ct);
+
+        return CtdModuleCatalog.All.Select(m =>
+        {
+            var overrides = mine.Where(s => s.ModuleId == m.Id).ToArray();
+            if (overrides.Length > 0)
+                return new ProjectSourcesByModule(m.Id, m.Label, m.Color, overrides);
+
+            var fallback = defaults.FirstOrDefault(g => string.Equals(g.ModuleId, m.Id, StringComparison.OrdinalIgnoreCase));
+            var synthesized = fallback is null
+                ? Array.Empty<ProjectSource>()
+                : new[]
+                {
+                    new ProjectSource(0, projectId, fallback.ModuleId, fallback.Label, fallback.Path,
+                        fallback.Type, fallback.SyncedAt, fallback.Status, IsDefault: true),
+                };
+            return new ProjectSourcesByModule(m.Id, m.Label, m.Color, synthesized);
+        }).ToArray();
     }
 
     public override Task<ProjectSource> AddAsync(ProjectSource item, CancellationToken ct = default)
