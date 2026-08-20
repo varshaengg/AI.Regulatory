@@ -16,6 +16,8 @@ trigger:
       - deploy/scripts/apply-appsettings.ps1
       - deploy/pipelines/deploy-api.ado.yml
 
+pr: none
+
 parameters:
   - name: targetEnv
     displayName: 'Target environment'

@@ -21,6 +21,8 @@ trigger:
       - deploy/config/spa.*.env
       - deploy/pipelines/deploy-web.ado.yml
 
+pr: none
+
 parameters:
   - name: targetEnv
     displayName: 'Target environment'

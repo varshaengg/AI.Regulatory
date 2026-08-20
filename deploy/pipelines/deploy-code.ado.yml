@@ -24,6 +24,8 @@ trigger:
       - package-lock.json
       - deploy/pipelines/deploy-code.ado.yml
 
+pr: none
+
 parameters:
   - name: targetEnv
     displayName: 'Target environment'

@@ -26,6 +26,8 @@ trigger:
       - data/sql/**
       - deploy/pipelines/deploy-sql.ado.yml
 
+pr: none
+
 parameters:
   - name: targetEnv
     displayName: 'Target environment'
