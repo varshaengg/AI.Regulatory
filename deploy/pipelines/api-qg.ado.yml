@@ -1,0 +1,78 @@
+# =============================================================================
+# ARA — API Quality Gate (Azure DevOps)
+# ADO equivalent of .github/workflows/api-qg.yml. Runs only on pull requests
+# targeting main that touch the .NET API codebase. Restores, builds
+# (Release, warnings as errors), checks for known-vulnerable/deprecated
+# NuGet packages, and runs unit tests if a test project exists.
+# Does not deploy anything — this is a PR gate only.
+#
+# NOTE: pr: triggers are only honored by ADO when the source repo is
+# GitHub/Bitbucket Cloud (this repo's case). For Azure Repos Git, PR builds
+# are driven by Branch Policies -> Build Validation instead.
+# =============================================================================
+name: ARA-API-QG-$(Date:yyyyMMdd)$(Rev:.rr)
+
+trigger: none
+
+pr:
+  branches:
+    include: [ main ]
+  paths:
+    include:
+      - api/**
+      - deploy/pipelines/api-qg.ado.yml
+
+variables:
+  dotnetVersion: '8.0.x'
+  apiProject: 'api/src/AI.Regulatory.API/AI.Regulatory.API.csproj'
+
+stages:
+  - stage: QualityGate
+    displayName: 'API Quality Gate'
+    jobs:
+      - job: BuildAndCheck
+        displayName: 'Build and vulnerability checks'
+        pool: { vmImage: 'ubuntu-latest' }
+        steps:
+          - task: UseDotNet@2
+            inputs: { packageType: 'sdk', version: '$(dotnetVersion)' }
+
+          - script: dotnet restore $(apiProject)
+            displayName: 'dotnet restore'
+
+          - script: dotnet build $(apiProject) -c Release --no-restore -warnaserror
+            displayName: 'dotnet build (Release, warnings as errors)'
+
+          - script: |
+              set -e
+              echo "== Vulnerable packages =="
+              dotnet list $(apiProject) package --vulnerable --include-transitive | tee vulnerable.txt
+              if grep -q "has the following vulnerable packages" vulnerable.txt; then
+                echo "##vso[task.logissue type=warning]Vulnerable NuGet package(s) detected (see log). Not yet a hard gate — pre-existing transitive vulnerabilities predate this pipeline."
+              fi
+              echo "== Deprecated packages =="
+              dotnet list $(apiProject) package --deprecated | tee deprecated.txt
+              if grep -q "has the following deprecated packages" deprecated.txt; then
+                echo "##vso[task.logissue type=warning]Deprecated NuGet package(s) detected — see log above."
+              fi
+            displayName: 'Check for vulnerable / deprecated NuGet packages'
+
+          - script: |
+              set -e
+              TEST_PROJECTS=$(find api -type f -name "*.Tests.csproj" 2>/dev/null || true)
+              if [ -z "$TEST_PROJECTS" ]; then
+                echo "No *.Tests.csproj found under api/ — skipping test step."
+                exit 0
+              fi
+              for proj in $TEST_PROJECTS; do
+                echo "Running tests: $proj"
+                dotnet test "$proj" -c Release --no-restore --logger "trx"
+              done
+            displayName: 'Run unit tests (if a test project exists)'
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/*.trx'
+              failTaskOnFailedTests: true
