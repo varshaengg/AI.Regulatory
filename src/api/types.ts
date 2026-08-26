@@ -80,6 +80,19 @@ export interface CtdTemplate {
   uploadedBy: string;
   uploadedOn: string;
   status: "Active" | "Draft" | "Archived";
+  moduleId: string;
+  fileName: string;
+  format: "pdf" | string;
+  scope: "Global" | "Project" | string;
+  projectId: string | null;
+  isDefault: boolean;
+}
+
+export interface CtdTemplateModuleEntry {
+  moduleId: string;
+  label: string;
+  color: string;
+  template: CtdTemplate | null;
 }
 
 // ─── Project sources — A4 ───────────────────────────────────────────────────

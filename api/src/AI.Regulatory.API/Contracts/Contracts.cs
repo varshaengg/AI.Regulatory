@@ -90,7 +90,19 @@ public sealed record CtdTemplate(
     string Version,
     string UploadedBy,
     DateTime UploadedOn,
-    string Status);       // Active | Draft | Archived
+    string Status,        // Active | Draft | Archived
+    string ModuleId = "",
+    string FileName = "",
+    string Format = "pdf",
+    string Scope = "Global",
+    string? ProjectId = null,
+    bool IsDefault = true);
+
+public sealed record CtdTemplateModuleEntry(
+    string ModuleId,
+    string Label,
+    string Color,
+    CtdTemplate? Template);
 
 
 // ─── Project sources — A4, L5 ─────────────────────────────────────────────────

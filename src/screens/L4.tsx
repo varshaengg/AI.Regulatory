@@ -5,21 +5,52 @@ import { useNavigate } from "react-router";
 import { Upload, ArrowRight } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, Stepper, ScreenCaption } from "../design/primitives";
-import { listModules, listSubModules } from "../api/resources";
+import { getProjectTemplates, listModules, listSubModules, uploadProjectTemplateOverride } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 
 export default function L4Screen() {
   const navigate = useNavigate();
   const projectId = new URLSearchParams(window.location.search).get("projectId");
   const [sel, setSel] = useState(2);
+  const [refreshTemplates, setRefreshTemplates] = useState(0);
+  const [uploadingTemplate, setUploadingTemplate] = useState(false);
+  const [templateMessage, setTemplateMessage] = useState<string | null>(null);
   const projectQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
 
   const modules = useApi((sig) => listModules(sig), []);
   const active = modules.status === "ready" ? modules.data[sel] : null;
+  const templates = useApi(
+    (sig) => (projectId ? getProjectTemplates(projectId, sig) : Promise.resolve([])),
+    [projectId, refreshTemplates],
+  );
+  const activeTemplate = templates.status === "ready" && active
+    ? templates.data.find((entry) => entry.moduleId === active.id)?.template ?? null
+    : null;
   const subs = useApi(
     (sig) => (active ? listSubModules(active.id, sig) : Promise.resolve([])),
     [active?.id],
   );
+
+  async function uploadOverride(file: File | null) {
+    if (!file || !projectId || !active) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setTemplateMessage("Only .pdf CTD template files are allowed.");
+      return;
+    }
+
+    setUploadingTemplate(true);
+    setTemplateMessage(null);
+    try {
+      await uploadProjectTemplateOverride(projectId, active.id, activeTemplate?.version ?? "1.0", file);
+      setTemplateMessage(`${active.id} template override uploaded.`);
+      setRefreshTemplates((v) => v + 1);
+    } catch (err) {
+      setTemplateMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadingTemplate(false);
+    }
+  }
 
   const srcColor: Record<string, "success" | "warning" | "danger"> = { Found: "success", Partial: "warning", Missing: "danger" };
   const th: React.CSSProperties = { padding: "7px 12px", textAlign: "left", fontWeight: 600, fontSize: 12, color: C.text2, borderBottom: `1px solid ${C.border1}`, backgroundColor: C.bg2 };
@@ -61,11 +92,38 @@ export default function L4Screen() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, marginBottom: 6 }}>MODULE TEMPLATE</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Chip color="brand">{active ? `${active.id} · ${active.label} v4.2` : "…"}</Chip>
-                  <span style={{ fontSize: 11, color: C.text3 }}>Uploaded 2025-11-08 · Sara M.</span>
+                  <Chip color={activeTemplate?.isDefault === false ? "warning" : "brand"}>
+                    {activeTemplate
+                      ? `${activeTemplate.moduleId} · v${activeTemplate.version}`
+                      : active ? `${active.id} · no template configured` : "…"}
+                  </Chip>
+                  <span style={{ fontSize: 11, color: C.text3 }}>
+                    {templates.status === "loading"
+                      ? "Loading template..."
+                      : activeTemplate
+                        ? `${activeTemplate.isDefault ? "Global default" : "Project override"} · ${activeTemplate.fileName}`
+                        : "Ask an admin to upload the global PDF default or upload a project override."}
+                  </span>
                 </div>
+                {templateMessage && <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>{templateMessage}</div>}
               </div>
-              <Btn variant="secondary"><Upload size={12} />Upload new version</Btn>
+              <label>
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  disabled={uploadingTemplate || !projectId || !active}
+                  onChange={(e) => void uploadOverride(e.target.files?.[0] ?? null)}
+                  style={{ display: "none" }}
+                  data-id="project-template-override-file"
+                />
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", fontSize: 13, fontWeight: 500,
+                  borderRadius: 4, border: `1px solid ${C.border1}`, backgroundColor: "white", color: C.text1,
+                  cursor: uploadingTemplate || !projectId || !active ? "not-allowed" : "pointer", opacity: uploadingTemplate || !projectId || !active ? 0.55 : 1,
+                }}>
+                  <Upload size={12} />{uploadingTemplate ? "Uploading..." : activeTemplate?.isDefault === false ? "Replace override" : "Override with PDF"}
+                </span>
+              </label>
             </div>
 
             <div>

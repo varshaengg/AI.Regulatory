@@ -1,6 +1,7 @@
 // A2 — CTD template catalog. Loads templates from /api/v1/templates.
 import * as React from "react";
 import { Search, Upload } from "lucide-react";
+import { useNavigate } from "react-router";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
 import { listTemplates } from "../api/resources";
@@ -14,6 +15,7 @@ function displayCountry(country: string): string {
 }
 
 export default function A2Screen() {
+  const navigate = useNavigate();
   const tmpl = useApi((sig) => listTemplates(sig).then(p => p.items), []);
 
   const statusColor: Record<CtdTemplate["status"], "success" | "warning" | "disabled"> = {
@@ -32,9 +34,9 @@ export default function A2Screen() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, color: C.text1, marginBottom: 4 }}>CTD Template Catalog</h1>
-          <p style={{ fontSize: 13, color: C.text3 }}>Templates apply per country. View, replace, archive, or upload the template for each module individually.</p>
+          <p style={{ fontSize: 13, color: C.text3 }}>Admin-uploaded PDF templates are global defaults per CTD module. Project teams can override them in the dossier module step.</p>
         </div>
-        <Btn variant="primary"><Upload size={13} />Upload template</Btn>
+        <Btn variant="primary" onClick={() => navigate("/screen/A3")}><Upload size={13} />Upload PDF template</Btn>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, marginBottom: 12, flexWrap: "wrap" }}>
@@ -60,7 +62,7 @@ export default function A2Screen() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ backgroundColor: C.bg2 }}>
-              {["Country", "Region", "Modules — per-module actions", "Version", "Uploaded by", "Uploaded on", "Status"].map(h => (
+              {["Scope", "Module", "Template PDF", "Version", "Uploaded by", "Uploaded on", "Status"].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
@@ -72,17 +74,13 @@ export default function A2Screen() {
             {tmpl.status === "ready" && tmpl.data.map((row, i) => (
               <tr key={row.id} style={{ backgroundColor: i % 2 === 0 ? "white" : C.bg }}>
                 <td style={{ ...td, color: C.text1, fontWeight: 500, whiteSpace: "nowrap" }}>{displayCountry(row.country)}</td>
-                <td style={{ ...td, color: C.text2 }}>{row.region}</td>
+                <td style={{ ...td, color: C.text2 }}>{row.moduleId || row.modules.map(m => `M${m}`).join(", ")}</td>
                 <td style={td}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {row.modules.map(m => (
                       <div key={m} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: mColors[m], color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>M{m}</div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          {[["View", C.brand], ["Replace", C.brand], ["Archive", C.text3], ["Upload", C.brand]].map(([label, color]) => (
-                            <button key={label} style={{ fontSize: 11, color, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>{label}</button>
-                          ))}
-                        </div>
+                        <span style={{ color: C.text2 }}>{row.fileName || "Template file"}</span>
                       </div>
                     ))}
                   </div>

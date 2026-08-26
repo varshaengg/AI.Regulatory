@@ -5,7 +5,7 @@ import { api } from "./client";
 import type {
   Page,
   ProjectSummary, ProjectDetail, CreateProjectRequest, UpdateProjectRequest,
-  CtdTemplate,
+  CtdTemplate, CtdTemplateModuleEntry,
   ProjectSourcesByModule, ProjectSource,
   CreateProjectSourceRequest, UpdateProjectSourceRequest,
   TestSourceConnectionRequest, ConnectionTestResult,
@@ -38,6 +38,22 @@ export const archiveProject = (id: string, signal?: AbortSignal) =>
 // Templates
 export const listTemplates = (signal?: AbortSignal) =>
   api.get<Page<CtdTemplate>>("/templates", undefined, signal);
+export const uploadGlobalTemplate = (moduleId: string, version: string, file: File, signal?: AbortSignal) => {
+  const body = new FormData();
+  body.set("version", version);
+  body.set("file", file);
+  return api.postForm<CtdTemplate>(`/templates/global/${encodeURIComponent(moduleId)}`, body, signal);
+};
+export const getProjectTemplates = (projectId: string, signal?: AbortSignal) =>
+  api.get<CtdTemplateModuleEntry[]>(`/projects/${encodeURIComponent(projectId)}/templates`, undefined, signal);
+export const uploadProjectTemplateOverride = (projectId: string, moduleId: string, version: string, file: File, signal?: AbortSignal) => {
+  const body = new FormData();
+  body.set("version", version);
+  body.set("file", file);
+  return api.postForm<CtdTemplate>(`/projects/${encodeURIComponent(projectId)}/templates/${encodeURIComponent(moduleId)}`, body, signal);
+};
+export const deleteProjectTemplateOverride = (projectId: string, moduleId: string, signal?: AbortSignal) =>
+  api.del<void>(`/projects/${encodeURIComponent(projectId)}/templates/${encodeURIComponent(moduleId)}`, signal);
 
 // Project sources
 export const getProjectSources = (projectId: string, signal?: AbortSignal) =>

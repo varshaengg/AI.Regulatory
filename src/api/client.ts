@@ -88,9 +88,42 @@ async function request<TResponse>(
   return parsed as TResponse;
 }
 
+async function formRequest<TResponse>(
+  method: string,
+  path: string,
+  body: FormData,
+  signal?: AbortSignal,
+): Promise<TResponse> {
+  const token = await bearerToken();
+  const res = await fetch(buildUrl(path), {
+    method,
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body,
+    signal,
+  });
+
+  if (res.status === 204) return undefined as TResponse;
+
+  const text = await res.text();
+  const parsed = text ? (JSON.parse(text) as unknown) : undefined;
+
+  if (!res.ok) {
+    const problem: ProblemDetails =
+      parsed && typeof parsed === "object"
+        ? (parsed as ProblemDetails)
+        : { status: res.status, title: res.statusText };
+    throw new ApiError(res.status, problem);
+  }
+  return parsed as TResponse;
+}
+
 export const api = {
   get:  <T>(path: string, query?: Query, signal?: AbortSignal) => request<T>("GET", path, { query, signal }),
   post: <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("POST", path, { body, signal }),
+  postForm: <T>(path: string, body: FormData, signal?: AbortSignal) => formRequest<T>("POST", path, body, signal),
   put:  <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("PUT", path, { body, signal }),
   patch:<T>(path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal) =>
     request<T>("PATCH", path, { body, headers, signal }),
