@@ -44,6 +44,8 @@ export const uploadGlobalTemplate = (moduleId: string, version: string, file: Fi
   body.set("file", file);
   return api.postForm<CtdTemplate>(`/templates/global/${encodeURIComponent(moduleId)}`, body, signal);
 };
+export const deleteGlobalTemplate = (id: string, signal?: AbortSignal) =>
+  api.del<void>(`/templates/${encodeURIComponent(id)}`, signal);
 export const getProjectTemplates = (projectId: string, signal?: AbortSignal) =>
   api.get<CtdTemplateModuleEntry[]>(`/projects/${encodeURIComponent(projectId)}/templates`, undefined, signal);
 export const uploadProjectTemplateOverride = (projectId: string, moduleId: string, version: string, file: File, signal?: AbortSignal) => {

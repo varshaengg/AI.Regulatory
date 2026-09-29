@@ -1,10 +1,10 @@
 // A2 — CTD template catalog. Loads templates from /api/v1/templates.
 import * as React from "react";
-import { Search, Upload } from "lucide-react";
+import { Search, Trash2, Upload } from "lucide-react";
 import { useNavigate } from "react-router";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
-import { listTemplates } from "../api/resources";
+import { deleteGlobalTemplate, listTemplates } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 import type { CtdTemplate } from "../api/types";
 
@@ -16,7 +16,30 @@ function displayCountry(country: string): string {
 
 export default function A2Screen() {
   const navigate = useNavigate();
-  const tmpl = useApi((sig) => listTemplates(sig).then(p => p.items), []);
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const tmpl = useApi((sig) => listTemplates(sig).then(p => p.items), [refreshKey]);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+
+  const removeTemplate = async (row: CtdTemplate) => {
+    const module = row.moduleId || row.modules.map(m => `M${m}`).join(", ");
+    const confirmed = window.confirm(
+      `Delete global template "${row.fileName || module}" (${module})? ` +
+      `Projects without an override will have no default template for ${module}.`,
+    );
+    if (!confirmed) return;
+
+    setBusyId(row.id);
+    setActionError(null);
+    try {
+      await deleteGlobalTemplate(row.id);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete template.");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const statusColor: Record<CtdTemplate["status"], "success" | "warning" | "disabled"> = {
     Active: "success",
@@ -57,19 +80,23 @@ export default function A2Screen() {
       </div>
 
       {tmpl.status === "error" && <ErrorBanner message={tmpl.error} style={{ marginBottom: 12 }} />}
+      {actionError && <ErrorBanner message={actionError} style={{ marginBottom: 12 }} />}
 
       <Card style={{ overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ backgroundColor: C.bg2 }}>
-              {["Scope", "Module", "Template PDF", "Version", "Uploaded by", "Uploaded on", "Status"].map(h => (
+              {["Scope", "Module", "Template PDF", "Version", "Uploaded by", "Uploaded on", "Status", "Actions"].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {tmpl.status === "loading" && (
-              <tr><td style={{ ...td, color: C.text3, fontStyle: "italic" }} colSpan={7}>Loading templates…</td></tr>
+              <tr><td style={{ ...td, color: C.text3, fontStyle: "italic" }} colSpan={8}>Loading templates…</td></tr>
+            )}
+            {tmpl.status === "ready" && tmpl.data.length === 0 && (
+              <tr><td style={{ ...td, color: C.text3, fontStyle: "italic" }} colSpan={8}>No global templates uploaded yet.</td></tr>
             )}
             {tmpl.status === "ready" && tmpl.data.map((row, i) => (
               <tr key={row.id} style={{ backgroundColor: i % 2 === 0 ? "white" : C.bg }}>
@@ -89,6 +116,18 @@ export default function A2Screen() {
                 <td style={{ ...td, color: C.text2 }}>{row.uploadedBy}</td>
                 <td style={{ ...td, color: C.text3 }}>{new Date(row.uploadedOn).toISOString().slice(0, 10)}</td>
                 <td style={td}><Chip color={statusColor[row.status]}>{row.status}</Chip></td>
+                <td style={td}>
+                  <Btn
+                    variant="subtle"
+                    style={{ fontSize: 11, padding: "3px 8px", color: C.danger }}
+                    disabled={busyId !== null}
+                    onClick={() => removeTemplate(row)}
+                    data-id={`delete-template-${row.id}`}
+                    aria-label={`Delete ${row.fileName || row.moduleId || "template"}`}
+                  >
+                    <Trash2 size={11} />{busyId === row.id ? "Deleting…" : "Delete"}
+                  </Btn>
+                </td>
               </tr>
             ))}
           </tbody>

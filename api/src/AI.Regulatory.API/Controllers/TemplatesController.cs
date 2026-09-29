@@ -43,7 +43,7 @@ public sealed class TemplatesController : ControllerBase
     public async Task<ActionResult<CtdTemplate>> UploadGlobal(
         string moduleId,
         [FromForm] string version,
-        [FromForm] IFormFile file,
+        IFormFile file,
         CancellationToken ct)
     {
         var validation = await ValidateUploadAsync(moduleId, version, file, ct);
@@ -52,6 +52,23 @@ public sealed class TemplatesController : ControllerBase
         var storagePath = await SaveTemplateAsync("global", moduleId, file, ct);
         var saved = await _repo.UpsertGlobalAsync(moduleId, version, Path.GetFileName(file.FileName), storagePath, CurrentUserName(), ct);
         return Ok(saved);
+    }
+
+    /// <summary>Archives a global CTD template; projects without an override lose their default for that module.</summary>
+    [HttpDelete("{id}")]
+    [Authorize(Policy = AuthPolicies.TemplatesAdmin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteGlobal(string id, CancellationToken ct)
+    {
+        if (await _repo.DeleteGlobalAsync(id, ct))
+            return NoContent();
+
+        return Problem(
+            type: ErrorTypes.NotFound,
+            title: "Template not found",
+            statusCode: StatusCodes.Status404NotFound,
+            detail: $"No active global CTD template '{id}' exists.");
     }
 
     [HttpGet("/api/v1/projects/{projectId}/templates")]
@@ -70,7 +87,7 @@ public sealed class TemplatesController : ControllerBase
         string projectId,
         string moduleId,
         [FromForm] string version,
-        [FromForm] IFormFile file,
+        IFormFile file,
         CancellationToken ct)
     {
         var validation = await ValidateUploadAsync(moduleId, version, file, ct);

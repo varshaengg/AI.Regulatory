@@ -75,6 +75,33 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         return await GetFromStoreAsync(id.ToString(), ct);
     }
 
+    /// <summary>Archives an active global CTD template by identifier.</summary>
+    public async Task<bool> DeleteGlobalAsync(string id, CancellationToken ct)
+    {
+        if (IsMocked)
+        {
+            var count = SeedList.RemoveAll(t =>
+                MatchesId(t, id)
+                && string.Equals(t.Scope, "Global", StringComparison.OrdinalIgnoreCase)
+                && t.Status != "Archived");
+            return count > 0;
+        }
+
+        if (!Guid.TryParse(id, out var templateId))
+            return false;
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE [dbo].[CtdTemplate]
+            SET [Status] = N'Archived'
+            WHERE [Id] = @templateId AND [ProjectId] IS NULL AND [Status] <> N'Archived';
+            """,
+            new { templateId },
+            cancellationToken: ct));
+        return rows > 0;
+    }
+
     public async Task<bool> DeleteProjectOverrideAsync(string projectId, string moduleId, CancellationToken ct)
     {
         if (IsMocked)
