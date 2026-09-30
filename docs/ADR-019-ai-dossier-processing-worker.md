@@ -1,8 +1,11 @@
 # ADR-019: Durable AI Dossier Processing Worker
 
-**Status:** Proposed  
-**Date:** 2026-09-29  
-**Decision owners:** Product owner, solution architect, engineering lead  
+**Status:** Proposed
+
+**Date:** 2026-09-29
+
+**Decision owners:** Product owner, solution architect, engineering lead
+
 **Related design:** [AI Dossier Preparation - Detailed Design](AI-Dossier-Preparation-Design.md)
 
 ## Context

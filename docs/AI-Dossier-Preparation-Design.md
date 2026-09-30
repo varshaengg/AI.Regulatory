@@ -1,9 +1,13 @@
 # AI Dossier Preparation - Detailed Design
 
-**Status:** Proposed for human approval  
-**Date:** 2026-09-29  
-**Related requirements:** Sprint 1 stories 7, 9, 12, 13, 15, 16, 21, 22  
-**Parent design:** [Software Design Document](SDD.md), especially sections 4.5-4.8, 4.12, 5, 6, and 8  
+**Status:** Proposed for human approval
+
+**Date:** 2026-09-29
+
+**Related requirements:** Sprint 1 stories 7, 9, 12, 13, 15, 16, 21, 22
+
+**Parent design:** [Software Design Document](SDD.md), especially sections 4.5-4.8, 4.12, 5, 6, and 8
+
 **Architecture decision:** [ADR-019](ADR-019-ai-dossier-processing-worker.md)
 
 ## 1. Purpose
