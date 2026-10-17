@@ -5,6 +5,7 @@ using AI.Regulatory.API.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace AI.Regulatory.API.Controllers;
 
@@ -14,7 +15,7 @@ namespace AI.Regulatory.API.Controllers;
 [Authorize(Policy = AuthPolicies.TemplatesAdmin)]
 [Tags("Templates (M3)")]
 [Produces("application/json")]
-public sealed class TemplatesController : ControllerBase
+public sealed partial class TemplatesController : ControllerBase
 {
     private readonly TemplatesRepository _repo;
     private readonly IWebHostEnvironment _env;
@@ -44,15 +45,48 @@ public sealed class TemplatesController : ControllerBase
         string moduleId,
         [FromForm] string version,
         IFormFile file,
-        CancellationToken ct)
+        CancellationToken ct,
+        [FromForm] string? country = null,
+        [FromForm] bool makeDefault = false)
     {
         var validation = await ValidateUploadAsync(moduleId, version, file, ct);
         if (validation is not null) return validation;
 
-        var storagePath = await SaveTemplateAsync("global", moduleId, file, ct);
-        var saved = await _repo.UpsertGlobalAsync(moduleId, version, Path.GetFileName(file.FileName), storagePath, CurrentUserName(), ct);
+        var normalizedCountry = TemplatesRepository.NormalizeCountry(country);
+        if (normalizedCountry != TemplatesRepository.GlobalCountry && !CountryCode().IsMatch(normalizedCountry))
+        {
+            return Problem(
+                type: ErrorTypes.Validation,
+                title: "Validation failed",
+                statusCode: StatusCodes.Status400BadRequest,
+                detail: "country must be \"Global\" or a two-letter country code.");
+        }
+
+        var storagePath = await SaveTemplateAsync($"global/{normalizedCountry}", moduleId, file, ct);
+        var saved = await _repo.UpsertGlobalAsync(moduleId, normalizedCountry, version, Path.GetFileName(file.FileName), storagePath, CurrentUserName(), makeDefault, ct);
         return Ok(saved);
     }
+
+    /// <summary>Marks a global template as the default for its country and module; other templates for the same pair stop being the default.</summary>
+    [HttpPut("{id}/default")]
+    [Authorize(Policy = AuthPolicies.TemplatesAdmin)]
+    [ProducesResponseType(typeof(CtdTemplate), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CtdTemplate>> SetDefault(string id, CancellationToken ct)
+    {
+        var saved = await _repo.SetDefaultAsync(id, ct);
+        if (saved is not null)
+            return Ok(saved);
+
+        return Problem(
+            type: ErrorTypes.NotFound,
+            title: "Template not found",
+            statusCode: StatusCodes.Status404NotFound,
+            detail: $"No active global CTD template '{id}' exists.");
+    }
+
+    [GeneratedRegex("^[A-Z]{2}$")]
+    private static partial Regex CountryCode();
 
     /// <summary>Archives a global CTD template; projects without an override lose their default for that module.</summary>
     [HttpDelete("{id}")]
@@ -116,13 +150,14 @@ public sealed class TemplatesController : ControllerBase
 
     private async Task<ActionResult<CtdTemplate>?> ValidateUploadAsync(string moduleId, string version, IFormFile? file, CancellationToken ct)
     {
-        if (!CtdModuleCatalog.All.Any(m => string.Equals(m.Id, moduleId, StringComparison.OrdinalIgnoreCase)))
+        if (!string.Equals(moduleId, TemplatesRepository.AllModules, StringComparison.OrdinalIgnoreCase)
+            && !CtdModuleCatalog.All.Any(m => string.Equals(m.Id, moduleId, StringComparison.OrdinalIgnoreCase)))
         {
             return Problem(
                 type: ErrorTypes.Validation,
                 title: "Validation failed",
                 statusCode: StatusCodes.Status400BadRequest,
-                detail: $"moduleId must be one of {string.Join(", ", CtdModuleCatalog.All.Select(m => m.Id))}.");
+                detail: $"moduleId must be ALL or one of {string.Join(", ", CtdModuleCatalog.All.Select(m => m.Id))}.");
         }
 
         if (string.IsNullOrWhiteSpace(version))

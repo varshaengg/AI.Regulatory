@@ -7,6 +7,7 @@ import { Btn, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primiti
 import { uploadGlobalTemplate } from "../api/resources";
 
 const modules = [
+  { id: "ALL", label: "All modules — complete CTD (M1–M5)" },
   { id: "M1", label: "M1 — Administrative" },
   { id: "M2", label: "M2 — Summaries" },
   { id: "M3", label: "M3 — Quality" },
@@ -14,9 +15,21 @@ const modules = [
   { id: "M5", label: "M5 — Clinical" },
 ] as const;
 
+const countries = [
+  { code: "Global", label: "All countries (Global)" },
+  { code: "DE", label: "Germany (DE)" },
+  { code: "FR", label: "France (FR)" },
+  { code: "IT", label: "Italy (IT)" },
+  { code: "ES", label: "Spain (ES)" },
+  { code: "NL", label: "Netherlands (NL)" },
+  { code: "GB", label: "United Kingdom (GB)" },
+] as const;
+
 export default function A3Screen() {
   const navigate = useNavigate();
   const [moduleId, setModuleId] = React.useState("M3");
+  const [country, setCountry] = React.useState("Global");
+  const [makeDefault, setMakeDefault] = React.useState(false);
   const [version, setVersion] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [status, setStatus] = React.useState<{ kind: "info" | "success" | "error"; text: string } | null>(null);
@@ -31,8 +44,14 @@ export default function A3Screen() {
     setUploading(true);
     setStatus(null);
     try {
-      const saved = await uploadGlobalTemplate(moduleId, version.trim(), file);
-      setStatus({ kind: "success", text: `${saved.moduleId} global default updated to ${saved.fileName} (v${saved.version}).` });
+      const saved = await uploadGlobalTemplate(moduleId, version.trim(), file, { country, makeDefault });
+      const scope = `${saved.moduleId} / ${saved.country}`;
+      setStatus({
+        kind: "success",
+        text: saved.isDefault
+          ? `${saved.fileName} (v${saved.version}) is now the default for ${scope}.`
+          : `${saved.fileName} (v${saved.version}) uploaded for ${scope}. Existing default unchanged — set it as default from the catalog.`,
+      });
       setFile(null);
     } catch (err) {
       setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
@@ -62,6 +81,17 @@ export default function A3Screen() {
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Country</span>
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                style={{ padding: "7px 10px", borderRadius: 4, border: `1px solid ${C.border1}`, fontSize: 13 }}
+                data-id="template-country"
+              >
+                {countries.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+              </select>
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <span style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Module</span>
               <select
                 value={moduleId}
@@ -84,6 +114,16 @@ export default function A3Screen() {
             </label>
           </div>
 
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.text2 }}>
+            <input
+              type="checkbox"
+              checked={makeDefault}
+              onChange={(e) => setMakeDefault(e.target.checked)}
+              data-id="template-make-default"
+            />
+            Set as the default for this country and module
+          </label>
+
           <div style={{ borderRadius: 6, border: `2px dashed ${validPdf ? C.border2 : C.danger}`, padding: "24px 16px", textAlign: "center" }}>
             <Upload size={24} color={C.text3} style={{ margin: "0 auto 8px" }} />
             <label style={{ fontSize: 13, color: C.text2, cursor: "pointer" }}>
@@ -103,7 +143,7 @@ export default function A3Screen() {
 
           <div style={{ padding: "8px 12px", borderRadius: 4, fontSize: 12, display: "flex", alignItems: "flex-start", gap: 8, backgroundColor: C.brandTint, color: C.brandPressed }}>
             <span style={{ marginTop: 1 }}>i</span>
-            <span>This upload replaces the current active global default for the selected module. Existing project overrides remain unchanged.</span>
+            <span>Only one template per country and module is the default. The first upload becomes the default automatically; later uploads become the default only if selected. Select "All modules" for a single PDF covering the whole CTD. Project overrides remain unchanged.</span>
           </div>
 
           {status && (

@@ -4,7 +4,7 @@ import { Search, Trash2, Upload } from "lucide-react";
 import { useNavigate } from "react-router";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
-import { deleteGlobalTemplate, listTemplates } from "../api/resources";
+import { deleteGlobalTemplate, listTemplates, setDefaultTemplate } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 import type { CtdTemplate } from "../api/types";
 
@@ -20,6 +20,19 @@ export default function A2Screen() {
   const tmpl = useApi((sig) => listTemplates(sig).then(p => p.items), [refreshKey]);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
+
+  const markDefault = async (row: CtdTemplate) => {
+    setBusyId(row.id);
+    setActionError(null);
+    try {
+      await setDefaultTemplate(row.id);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to set default template.");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const removeTemplate = async (row: CtdTemplate) => {
     const module = row.moduleId || row.modules.map(m => `M${m}`).join(", ");
@@ -57,7 +70,7 @@ export default function A2Screen() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, color: C.text1, marginBottom: 4 }}>CTD Template Catalog</h1>
-          <p style={{ fontSize: 13, color: C.text3 }}>Admin-uploaded PDF templates are global defaults per CTD module. Project teams can override them in the dossier module step.</p>
+          <p style={{ fontSize: 13, color: C.text3 }}>Admin-uploaded PDF templates are defaults per country and CTD module (or one PDF for all modules). Exactly one template per country and module is the default. Project teams can override them in the dossier module step.</p>
         </div>
         <Btn variant="primary" onClick={() => navigate("/screen/A3")}><Upload size={13} />Upload PDF template</Btn>
       </div>
@@ -86,37 +99,50 @@ export default function A2Screen() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ backgroundColor: C.bg2 }}>
-              {["Scope", "Module", "Template PDF", "Version", "Uploaded by", "Uploaded on", "Status", "Actions"].map(h => (
+              {["Country", "Module", "Template PDF", "Version", "Default", "Uploaded by", "Uploaded on", "Status", "Actions"].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {tmpl.status === "loading" && (
-              <tr><td style={{ ...td, color: C.text3, fontStyle: "italic" }} colSpan={8}>Loading templates…</td></tr>
+              <tr><td style={{ ...td, color: C.text3, fontStyle: "italic" }} colSpan={9}>Loading templates…</td></tr>
             )}
             {tmpl.status === "ready" && tmpl.data.length === 0 && (
-              <tr><td style={{ ...td, color: C.text3, fontStyle: "italic" }} colSpan={8}>No global templates uploaded yet.</td></tr>
+              <tr><td style={{ ...td, color: C.text3, fontStyle: "italic" }} colSpan={9}>No global templates uploaded yet.</td></tr>
             )}
             {tmpl.status === "ready" && tmpl.data.map((row, i) => (
               <tr key={row.id} style={{ backgroundColor: i % 2 === 0 ? "white" : C.bg }}>
                 <td style={{ ...td, color: C.text1, fontWeight: 500, whiteSpace: "nowrap" }}>{displayCountry(row.country)}</td>
-                <td style={{ ...td, color: C.text2 }}>{row.moduleId || row.modules.map(m => `M${m}`).join(", ")}</td>
+                <td style={{ ...td, color: C.text2 }}>{row.moduleId === "ALL" ? "All modules" : row.moduleId || row.modules.map(m => `M${m}`).join(", ")}</td>
                 <td style={td}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {row.modules.map(m => (
+                    {(row.moduleId === "ALL" ? ["ALL"] : row.modules).map(m => (
                       <div key={m} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: mColors[m], color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>M{m}</div>
+                        <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: mColors[m], color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{m === "ALL" ? "All" : `M${m}`}</div>
                         <span style={{ color: C.text2 }}>{row.fileName || "Template file"}</span>
                       </div>
                     ))}
                   </div>
                 </td>
                 <td style={{ ...td, color: C.text2 }}>v{row.version}</td>
+                <td style={td}>{row.isDefault ? <Chip color="success">Default</Chip> : <span style={{ color: C.text3 }}>—</span>}</td>
                 <td style={{ ...td, color: C.text2 }}>{row.uploadedBy}</td>
                 <td style={{ ...td, color: C.text3 }}>{new Date(row.uploadedOn).toISOString().slice(0, 10)}</td>
                 <td style={td}><Chip color={statusColor[row.status]}>{row.status}</Chip></td>
                 <td style={td}>
+                  {!row.isDefault && (
+                    <Btn
+                      variant="subtle"
+                      style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}
+                      disabled={busyId !== null}
+                      onClick={() => markDefault(row)}
+                      data-id={`set-default-template-${row.id}`}
+                      aria-label={`Set ${row.fileName || row.moduleId} as default for ${row.country} ${row.moduleId}`}
+                    >
+                      Set as default
+                    </Btn>
+                  )}
                   <Btn
                     variant="subtle"
                     style={{ fontSize: 11, padding: "3px 8px", color: C.danger }}
