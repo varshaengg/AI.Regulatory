@@ -46,6 +46,18 @@ builder.Services.AddSingleton<RunsRepository>();
 builder.Services.AddSingleton<PreparationRunsRepository>();
 builder.Services.AddSingleton<ISourceDocumentLister, BlobSourceDocumentLister>();
 builder.Services.AddSingleton<PreparationRunService>();
+{
+    var sbNamespace = builder.Configuration["ServiceBus:FullyQualifiedNamespace"];
+    if (!string.IsNullOrWhiteSpace(sbNamespace))
+    {
+        var queueName = builder.Configuration["ServiceBus:DossierQueue"] ?? "dossier-runs";
+        builder.Services.AddSingleton<IPreparationQueue>(_ => new ServiceBusPreparationQueue(sbNamespace, queueName));
+    }
+    else
+    {
+        builder.Services.AddSingleton<IPreparationQueue, InProcessPreparationQueue>();
+    }
+}
 builder.Services.AddSingleton<NotificationsRepository>();
 builder.Services.AddSingleton<AdminRepository>();
 builder.Services.AddSingleton<DocTreeRepository>();

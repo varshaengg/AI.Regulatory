@@ -168,6 +168,7 @@ module storage 'modules/storage.bicep' = if (wantStorage) {
     logAnalyticsWorkspaceId:  monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
     enableDiagnostics:        wantLogAnalytics
     skuName:                  sizingTier == 'dev' ? 'Standard_LRS' : 'Standard_GZRS'
+    workloadIdentityPrincipalId: workloadIdentity.?outputs.principalId ?? ''
   }
 }
 

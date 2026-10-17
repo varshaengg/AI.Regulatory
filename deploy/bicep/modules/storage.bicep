@@ -4,6 +4,8 @@ param location string
 param tags object
 param logAnalyticsWorkspaceId string = ''
 param enableDiagnostics bool = false
+@description('Workload identity that reads source documents and writes dossier outputs.')
+param workloadIdentityPrincipalId string = ''
 @description('Storage redundancy SKU. Standard_LRS for dev, Standard_GZRS for prod (must exist in region).')
 param skuName string = 'Standard_GZRS'
 
@@ -48,6 +50,17 @@ resource cCatalog  'Microsoft.Storage/storageAccounts/blobServices/containers@20
 resource cOverride 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = { parent: blobSvc, name: 'ara-overrides',     properties: { publicAccess: 'None' } }
 resource cDossier  'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = { parent: blobSvc, name: 'dossier-packages', properties: { publicAccess: 'None' } }
 resource cAudit    'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = { parent: blobSvc, name: 'audit-archive',     properties: { publicAccess: 'None' } }
+
+// Storage Blob Data Contributor: discovery reads source documents, later stages write dossier packages.
+resource workloadRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(workloadIdentityPrincipalId)) {
+  scope: stg
+  name: guid(stg.id, workloadIdentityPrincipalId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  properties: {
+    principalId: workloadIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  }
+}
 
 resource stgDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableDiagnostics && !empty(logAnalyticsWorkspaceId)) {
   scope: blobSvc

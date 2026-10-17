@@ -1,0 +1,5 @@
+[    7888ms] [LOG] MSAL.js token provider init: no in-flight redirect promise @ https://cdn.vsassets.io/ext/ms.vss-web/msal-content/ms.vss-web.msal-content.es6.wy_rif.min.js:0
+[    7889ms] [LOG] MSAL.js token provider init: loginRedirect @ https://cdn.vsassets.io/ext/ms.vss-web/msal-content/ms.vss-web.msal-content.es6.wy_rif.min.js:0
+[    7889ms] [LOG] calling loginRedirect @ https://cdn.vsassets.io/ext/ms.vss-web/msal-content/ms.vss-web.msal-content.es6.wy_rif.min.js:0
+[    9454ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://dev.azure.com/uc-solutions/AI-Solutions/_sprints/backlog/AI-Solutions%20Team/AI-Solutions/Sprint%201:0
+[    9541ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://dev.azure.com/favicon.ico:0

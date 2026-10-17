@@ -18,9 +18,11 @@ public sealed class PreparationRunsController : ControllerBase
 {
     private readonly PreparationRunService _service;
     private readonly PreparationRunsRepository _repo;
+    private readonly IPreparationQueue _queue;
 
-    public PreparationRunsController(PreparationRunService service, PreparationRunsRepository repo)
+    public PreparationRunsController(PreparationRunService service, PreparationRunsRepository repo, IPreparationQueue queue)
     {
+        _queue = queue;
         _service = service;
         _repo = repo;
     }
@@ -40,6 +42,7 @@ public sealed class PreparationRunsController : ControllerBase
                 return Problem(type: ErrorTypes.NotFound, title: "Project not found",
                     statusCode: StatusCodes.Status404NotFound, detail: $"No project with id '{projectId}'.");
             case PreparationRunOutcome.Created:
+                await _queue.EnqueueAsync(result.Run!.Id, ct);
                 return Created($"/api/v1/dossier-runs/{result.Run!.Id}", result.Run);
             default:
                 return Problem(title: "Run cannot start",
