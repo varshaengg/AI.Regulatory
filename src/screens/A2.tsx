@@ -7,6 +7,8 @@ import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/p
 import { deleteGlobalTemplate, listTemplates, publishTemplate, setDefaultTemplate, unpublishTemplate } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 import type { CtdTemplate } from "../api/types";
+import { usePermissions } from "../api/usePermissions";
+import { TemplateStructurePanel } from "./TemplateStructurePanel";
 
 const FLAG: Record<string, string> = { DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", NL: "🇳🇱", UK: "🇬🇧", GB: "🇬🇧", US: "🇺🇸" };
 
@@ -18,6 +20,10 @@ export default function A2Screen() {
   const navigate = useNavigate();
   const [refreshKey, setRefreshKey] = React.useState(0);
   const tmpl = useApi((sig) => listTemplates(sig).then(p => p.items), [refreshKey]);
+  const perms = usePermissions();
+  const canAdmin = perms.hasPermission("Templates", "Admin");
+  const [structureId, setStructureId] = React.useState<string | null>(null);
+  const structureTemplate = tmpl.status === "ready" ? tmpl.data.find(t => t.id === structureId) ?? null : null;
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
 
@@ -192,6 +198,14 @@ export default function A2Screen() {
                       </>
                     );
                   })()}
+                  <Btn
+                    variant="subtle"
+                    style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}
+                    onClick={() => setStructureId(row.id)}
+                    data-id={`template-structure-${row.id}`}
+                  >
+                    Structure
+                  </Btn>
                   {row.scope === "Global" && <Btn
                     variant="subtle"
                     style={{ fontSize: 11, padding: "3px 8px", color: C.danger }}
@@ -208,6 +222,9 @@ export default function A2Screen() {
           </tbody>
         </table>
       </Card>
+      {structureTemplate && (
+        <TemplateStructurePanel template={structureTemplate} canAdmin={canAdmin} onClose={() => setStructureId(null)} />
+      )}
     </div>
   );
 }

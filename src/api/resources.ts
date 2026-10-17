@@ -6,7 +6,7 @@ import type {
   Page,
   ProjectSummary, ProjectDetail, CreateProjectRequest, UpdateProjectRequest,
   CtdTemplate, CtdTemplateModuleEntry, ModuleGuideline, GuidelineRule,
-  PreparationRun, PreparationDocument, PreparationFinding, PreparationRunEvent,
+  PreparationRun, PreparationDocument, PreparationFinding, PreparationRunEvent, TemplateNode, TemplateStructure,
   ProjectSourcesByModule, ProjectSource,
   CreateProjectSourceRequest, UpdateProjectSourceRequest,
   TestSourceConnectionRequest, ConnectionTestResult,
@@ -197,3 +197,11 @@ export const getDossierRunFindings = (id: string, signal?: AbortSignal) =>
   api.get<PreparationFinding[]>(`/dossier-runs/${encodeURIComponent(id)}/findings`, undefined, signal);
 export const revalidateDossierRun = (id: string, signal?: AbortSignal) =>
   api.post<PreparationFinding[]>(`/dossier-runs/${encodeURIComponent(id)}/validate`, undefined, signal);
+
+// Template structure (parse + review)
+export const getTemplateStructure = (id: string, signal?: AbortSignal) =>
+  api.get<TemplateStructure>(`/templates/${encodeURIComponent(id)}/draft-structure`, undefined, signal);
+export const parseTemplate = (id: string, signal?: AbortSignal) =>
+  api.post<TemplateStructure>(`/templates/${encodeURIComponent(id)}/parse`, undefined, signal);
+export const saveTemplateStructure = (id: string, nodes: TemplateNode[], approve: boolean, signal?: AbortSignal) =>
+  api.put<TemplateStructure>(`/templates/${encodeURIComponent(id)}/draft-structure`, { nodes, approve }, signal);

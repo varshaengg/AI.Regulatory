@@ -398,3 +398,8 @@ export interface PreparationDocument {
 }
 export interface PreparationFinding { documentId: string; ruleKey: string; verdict: "pass" | "flag" | "unclear"; evidence?: string | null }
 export interface PreparationRunEvent { occurredUtc: string; stage: string; severity: "Info" | "Warning" | "Error"; message: string }
+
+export interface TemplateNode { nodeKey: string; parentKey?: string | null; title: string; guidance?: string | null; isMandatory: boolean }
+export interface TemplateStructure {
+  templateId: string; status: "Draft" | "Approved"; note?: string | null; updatedBy: string; updatedOn: string; nodes: TemplateNode[];
+}
