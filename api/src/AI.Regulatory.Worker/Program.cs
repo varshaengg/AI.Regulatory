@@ -12,6 +12,8 @@ builder.Services.AddSingleton<TemplatesRepository>();
 builder.Services.AddSingleton<GlobalSourcesRepository>();
 builder.Services.AddSingleton<ProjectSourcesRepository>();
 builder.Services.AddSingleton<PreparationRunsRepository>();
+builder.Services.AddSingleton<GuidelinesRepository>();
+builder.Services.AddGuidelineAi(builder.Configuration);
 builder.Services.AddSingleton<ISourceDocumentLister, BlobSourceDocumentLister>();
 builder.Services.AddSingleton<PreparationRunService>();
 builder.Services.AddHostedService<PreparationWorker>();

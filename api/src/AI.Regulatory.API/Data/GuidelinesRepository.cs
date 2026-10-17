@@ -77,6 +77,14 @@ public sealed class GuidelinesRepository
         return ToModel(head, rules);
     }
 
+    /// <summary>The published guideline for a module: the country's own, else the Global one.</summary>
+    public async Task<ModuleGuideline?> ResolvePublishedAsync(string moduleId, string country, CancellationToken ct)
+    {
+        var published = (await ListAsync(ct)).Where(g => g.IsPublished && g.ModuleId == moduleId).ToArray();
+        return published.FirstOrDefault(g => string.Equals(g.Country, country, StringComparison.OrdinalIgnoreCase))
+            ?? published.FirstOrDefault(g => g.Country == TemplatesRepository.GlobalCountry);
+    }
+
     public async Task<ModuleGuideline?> SaveRulesAsync(string id, IReadOnlyList<GuidelineRule> rules, CancellationToken ct)
     {
         if (_isMocked)

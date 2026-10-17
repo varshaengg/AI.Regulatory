@@ -264,7 +264,22 @@ public sealed record PreparationModuleSnapshot(
     string Label,
     PreparationTemplateRef? Template,
     IReadOnlyList<PreparationSourceRef> Sources,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    PreparationGuidelineRef? Guideline = null);
+
+/// <summary>Published guideline (with its rules) frozen into the run snapshot for the Validate stage.</summary>
+public sealed record PreparationGuidelineRef(
+    string Id,
+    string Version,
+    string Country,
+    IReadOnlyList<GuidelineRule> Rules);
+
+/// <summary>Advisory verdict of one guideline rule against one discovered document.</summary>
+public sealed record PreparationFinding(
+    string DocumentId,
+    string RuleKey,
+    string Verdict,       // pass | flag | unclear
+    string? Evidence);
 
 /// <summary>Templates and sources frozen at run creation so a rerun is reproducible.</summary>
 public sealed record PreparationSnapshot(

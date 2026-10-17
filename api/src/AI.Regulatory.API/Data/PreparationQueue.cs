@@ -60,7 +60,7 @@ public sealed class InProcessPreparationQueue : IPreparationQueue
         {
             try
             {
-                await _services.GetRequiredService<PreparationRunService>().DiscoverAsync(runId, CancellationToken.None);
+                await _services.GetRequiredService<PreparationRunService>().ProcessAsync(runId, CancellationToken.None);
             }
             catch (Exception ex)
             {

@@ -87,7 +87,7 @@ public sealed class PreparationWorker : BackgroundService
 
         try
         {
-            await _service.DiscoverAsync(message.RunId, args.CancellationToken);
+            await _service.ProcessAsync(message.RunId, args.CancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

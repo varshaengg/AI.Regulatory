@@ -45,11 +45,7 @@ builder.Services.AddSingleton<CommentsRepository>();
 builder.Services.AddSingleton<RunsRepository>();
 builder.Services.AddSingleton<PreparationRunsRepository>();
 builder.Services.AddSingleton<GuidelinesRepository>();
-if (!string.IsNullOrWhiteSpace(builder.Configuration["DocumentIntelligence:Endpoint"])
-    && !string.IsNullOrWhiteSpace(builder.Configuration["AzureOpenAi:Endpoint"]))
-    builder.Services.AddHttpClient<IGuidelineRuleExtractor, AzureAiGuidelineRuleExtractor>(c => c.Timeout = TimeSpan.FromMinutes(3));
-else
-    builder.Services.AddSingleton<IGuidelineRuleExtractor, ManualGuidelineRuleExtractor>();
+builder.Services.AddGuidelineAi(builder.Configuration);
 builder.Services.AddSingleton<ISourceDocumentLister, BlobSourceDocumentLister>();
 builder.Services.AddSingleton<PreparationRunService>();
 {

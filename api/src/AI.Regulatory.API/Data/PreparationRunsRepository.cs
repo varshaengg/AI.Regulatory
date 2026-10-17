@@ -18,6 +18,7 @@ public sealed class PreparationRunsRepository
     private readonly ConcurrentDictionary<string, PreparationRun> _runs = new();
     private readonly ConcurrentDictionary<string, List<PreparationRunEvent>> _events = new();
     private readonly ConcurrentDictionary<string, List<PreparationDocument>> _documents = new();
+    private readonly ConcurrentDictionary<string, List<PreparationFinding>> _findings = new();
 
     public PreparationRunsRepository(IOptions<DataOptions> options, ISqlConnectionFactory sql)
     {
@@ -168,12 +169,14 @@ public sealed class PreparationRunsRepository
         if (_isMocked)
         {
             _documents[runId] = documents.ToList();
+            _findings.TryRemove(runId, out _);
             return;
         }
 
         var guid = Guid.Parse(runId);
         await using var c = await _sql.OpenAsync(ct);
         await using var tx = await c.BeginTransactionAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition("DELETE FROM [dbo].[DossierDocumentFinding] WHERE [DossierRunId] = @guid;", new { guid }, tx, cancellationToken: ct));
         await c.ExecuteAsync(new CommandDefinition("DELETE FROM [dbo].[DossierDocument] WHERE [DossierRunId] = @guid;", new { guid }, tx, cancellationToken: ct));
         foreach (var d in documents)
         {
@@ -202,6 +205,49 @@ public sealed class PreparationRunsRepository
             SELECT CONVERT(VARCHAR(36), [Id]) AS [Id], CONVERT(VARCHAR(36), [DossierRunId]) AS [RunId], [ModuleId], [SourceLabel], [SourceType],
                    [BlobPath], [FileName], [ContentType], [SizeBytes], [LastModifiedUtc], [Status]
             FROM [dbo].[DossierDocument] WHERE [DossierRunId] = @guid ORDER BY [ModuleId], [FileName];
+            """,
+            new { guid }, cancellationToken: ct));
+        return rows.ToArray();
+    }
+
+    /// <summary>Replaces the run's findings, so validation can be re-run safely.</summary>
+    public async Task ReplaceFindingsAsync(string runId, IReadOnlyList<PreparationFinding> findings, CancellationToken ct)
+    {
+        if (_isMocked)
+        {
+            _findings[runId] = findings.ToList();
+            return;
+        }
+
+        var guid = Guid.Parse(runId);
+        await using var c = await _sql.OpenAsync(ct);
+        await using var tx = await c.BeginTransactionAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition("DELETE FROM [dbo].[DossierDocumentFinding] WHERE [DossierRunId] = @guid;", new { guid }, tx, cancellationToken: ct));
+        foreach (var f in findings)
+        {
+            await c.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO [dbo].[DossierDocumentFinding] ([DossierRunId], [DossierDocumentId], [RuleKey], [Verdict], [Evidence])
+                VALUES (@guid, @documentId, @RuleKey, @Verdict, @Evidence);
+                """,
+                new { guid, documentId = Guid.Parse(f.DocumentId), f.RuleKey, f.Verdict, f.Evidence }, tx, cancellationToken: ct));
+        }
+        await tx.CommitAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<PreparationFinding>> ListFindingsAsync(string runId, CancellationToken ct)
+    {
+        if (_isMocked)
+            return _findings.TryGetValue(runId, out var list) ? list.ToArray() : Array.Empty<PreparationFinding>();
+
+        if (!Guid.TryParse(runId, out var guid))
+            return Array.Empty<PreparationFinding>();
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.QueryAsync<PreparationFinding>(new CommandDefinition(
+            """
+            SELECT CONVERT(VARCHAR(36), [DossierDocumentId]) AS [DocumentId], [RuleKey], [Verdict], [Evidence]
+            FROM [dbo].[DossierDocumentFinding] WHERE [DossierRunId] = @guid ORDER BY [DossierDocumentId], [RuleKey];
             """,
             new { guid }, cancellationToken: ct));
         return rows.ToArray();

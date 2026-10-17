@@ -95,6 +95,27 @@ public sealed class PreparationRunsController : ControllerBase
         return Ok(await _repo.ListDocumentsAsync(id, ct));
     }
 
+    [HttpGet("dossier-runs/{id}/findings")]
+    [ProducesResponseType(typeof(IReadOnlyList<PreparationFinding>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<PreparationFinding>>> Findings(string id, CancellationToken ct)
+    {
+        if (await _repo.GetAsync(id, ct) is null)
+            return RunNotFound(id);
+        return Ok(await _repo.ListFindingsAsync(id, ct));
+    }
+
+    /// <summary>Re-runs the validate stage inline over the documents already discovered for the run.</summary>
+    [HttpPost("dossier-runs/{id}/validate")]
+    [Authorize(Policy = AuthPolicies.DossierManagementWrite)]
+    [ProducesResponseType(typeof(IReadOnlyList<PreparationFinding>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<PreparationFinding>>> Validate(string id, CancellationToken ct)
+    {
+        var findings = await _service.ValidateAsync(id, ct);
+        return findings is null ? RunNotFound(id) : Ok(findings);
+    }
+
     private ActionResult RunNotFound(string id)
         => Problem(type: ErrorTypes.NotFound, title: "Run not found",
             statusCode: StatusCodes.Status404NotFound, detail: $"No dossier run with id '{id}'.");

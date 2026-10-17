@@ -17,15 +17,20 @@ public sealed class PreparationRunService
     private readonly TemplatesRepository _templates;
     private readonly ProjectSourcesRepository _sources;
     private readonly PreparationRunsRepository _runs;
+    private readonly GuidelinesRepository _guidelines;
+    private readonly IDocumentValidator _validator;
     private readonly IEnumerable<ISourceDocumentLister> _listers;
     private readonly ILogger<PreparationRunService> _log;
     private const int MaxDocumentsPerSource = 500;
+    private const int MaxDocumentsToValidate = 50;
 
     public PreparationRunService(
         ProjectsRepository projects,
         TemplatesRepository templates,
         ProjectSourcesRepository sources,
         PreparationRunsRepository runs,
+        GuidelinesRepository guidelines,
+        IDocumentValidator validator,
         IEnumerable<ISourceDocumentLister> listers,
         ILogger<PreparationRunService> log)
     {
@@ -35,6 +40,8 @@ public sealed class PreparationRunService
         _templates = templates;
         _sources = sources;
         _runs = runs;
+        _guidelines = guidelines;
+        _validator = validator;
     }
 
     /// <summary>
@@ -47,6 +54,37 @@ public sealed class PreparationRunService
         if (run is null) return null;
 
         await _runs.SetStatusAsync(runId, "Running", ct);
+        var documents = await DiscoverCoreAsync(run, ct);
+        await _runs.SetStatusAsync(runId, "Completed", ct);
+        return documents;
+    }
+
+    /// <summary>Full pipeline run by the worker: Discover, then Validate against the module guidelines.</summary>
+    public async Task<bool> ProcessAsync(string runId, CancellationToken ct)
+    {
+        var run = await _runs.GetAsync(runId, ct);
+        if (run is null) return false;
+
+        await _runs.SetStatusAsync(runId, "Running", ct);
+        await DiscoverCoreAsync(run, ct);
+        await ValidateCoreAsync(run, ct);
+        await _runs.SetStatusAsync(runId, "Completed", ct);
+        return true;
+    }
+
+    /// <summary>Validate stage on its own, over the documents already discovered for the run.</summary>
+    public async Task<IReadOnlyList<PreparationFinding>?> ValidateAsync(string runId, CancellationToken ct)
+    {
+        var run = await _runs.GetAsync(runId, ct);
+        if (run is null) return null;
+
+        await ValidateCoreAsync(run, ct);
+        return await _runs.ListFindingsAsync(runId, ct);
+    }
+
+    private async Task<IReadOnlyList<PreparationDocument>> DiscoverCoreAsync(PreparationRun run, CancellationToken ct)
+    {
+        var runId = run.Id;
         var documents = new List<PreparationDocument>();
         var events = new List<PreparationRunEvent>();
 
@@ -80,8 +118,64 @@ public sealed class PreparationRunService
         await _runs.ReplaceDocumentsAsync(runId, documents, ct);
         events.Add(new(DateTime.UtcNow, "Discover", "Info", $"Discovery finished: {documents.Count} document(s)."));
         await _runs.AddEventsAsync(runId, events, ct);
-        await _runs.SetStatusAsync(runId, "Completed", ct);
         return documents;
+    }
+
+    /// <summary>
+    /// Advisory validation: each discovered document is checked against its module's frozen guideline rules.
+    /// Findings never block the run; a document that cannot be read is logged and skipped.
+    /// </summary>
+    private async Task ValidateCoreAsync(PreparationRun run, CancellationToken ct)
+    {
+        var withRules = run.Snapshot.Modules.Where(m => m.Guideline is { Rules.Count: > 0 }).ToArray();
+        if (withRules.Length == 0)
+        {
+            await _runs.AddEventsAsync(run.Id, [new(DateTime.UtcNow, "Validate", "Info", "No published guideline applies to this run; validation skipped.")], ct);
+            return;
+        }
+        if (!_validator.IsAvailable)
+        {
+            await _runs.AddEventsAsync(run.Id, [new(DateTime.UtcNow, "Validate", "Warning", "AI validation is not configured; validation skipped.")], ct);
+            return;
+        }
+
+        var documents = await _runs.ListDocumentsAsync(run.Id, ct);
+        var findings = new List<PreparationFinding>();
+        var events = new List<PreparationRunEvent>();
+        var checkedCount = 0;
+        var limitReached = false;
+
+        foreach (var module in withRules)
+        {
+            var candidates = documents.Where(d => d.ModuleId == module.ModuleId && AzureAiDocumentValidator.CanValidate(d));
+            foreach (var doc in candidates)
+            {
+                if (checkedCount >= MaxDocumentsToValidate)
+                {
+                    limitReached = true;
+                    break;
+                }
+
+                try
+                {
+                    findings.AddRange(await _validator.ValidateAsync(doc, module.Guideline!.Rules, ct));
+                    checkedCount++;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _log.LogWarning(ex, "Validation failed for run {RunId} document {File}", run.Id, doc.FileName);
+                    events.Add(new(DateTime.UtcNow, "Validate", "Error", $"{module.ModuleId}: could not validate '{doc.FileName}' ({ex.GetType().Name})."));
+                }
+            }
+            if (limitReached) break;
+        }
+
+        if (limitReached)
+            events.Add(new(DateTime.UtcNow, "Validate", "Warning", $"Validation limit of {MaxDocumentsToValidate} documents reached; remaining documents were not checked."));
+        await _runs.ReplaceFindingsAsync(run.Id, findings, ct);
+        var flagged = findings.Count(f => f.Verdict == "flag");
+        events.Add(new(DateTime.UtcNow, "Validate", "Info", $"Validated {checkedCount} document(s): {flagged} flagged of {findings.Count} checks (advisory)."));
+        await _runs.AddEventsAsync(run.Id, events, ct);
     }
 
     public async Task<PreparationRunResult> CreateAsync(string projectId, string startedBy, CancellationToken ct)
@@ -115,6 +209,13 @@ public sealed class PreparationRunService
 
             return new PreparationModuleSnapshot(m.Id, m.Label, template, moduleSources, warnings);
         }).ToArray();
+
+        for (var i = 0; i < modules.Length; i++)
+        {
+            var g = await _guidelines.ResolvePublishedAsync(modules[i].ModuleId, country, ct);
+            if (g is not null)
+                modules[i] = modules[i] with { Guideline = new PreparationGuidelineRef(g.Id, g.Version, g.Country, g.Rules) };
+        }
 
         if (modules.All(m => m.Template is null || m.Sources.Count == 0))
         {
