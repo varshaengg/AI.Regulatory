@@ -2,7 +2,9 @@ CREATE TABLE [dbo].[DossierRun]
 (
     [Id]                   UNIQUEIDENTIFIER NOT NULL,
     [ProjectId]           UNIQUEIDENTIFIER NOT NULL,
-    [CtdTemplateVersionId] UNIQUEIDENTIFIER NOT NULL,
+    [CtdTemplateVersionId] UNIQUEIDENTIFIER NULL,
+    [Country]              CHAR(2)          NULL,
+    [Snapshot]             NVARCHAR(MAX)    NULL, -- JSON: per-module resolved template + sources frozen at run creation
     [Status]               TINYINT          NOT NULL,
     [StartedUtc]           DATETIME2(3)     NOT NULL,
     [CompletedUtc]         DATETIME2(3)     NULL,

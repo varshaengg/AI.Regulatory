@@ -244,6 +244,50 @@ public sealed record RunAgent(
     string Status);       // running | idle
 
 
+// ─── AI dossier preparation runs ──────────────────────────────────────────────
+
+public sealed record PreparationTemplateRef(
+    string Id,
+    string FileName,
+    string Version,
+    string Country,
+    string Scope);        // Global | Project
+
+public sealed record PreparationSourceRef(
+    string Label,
+    string Path,
+    string Type,
+    bool IsDefault);      // true when it is the tenant-wide default, not a project override
+
+public sealed record PreparationModuleSnapshot(
+    string ModuleId,
+    string Label,
+    PreparationTemplateRef? Template,
+    IReadOnlyList<PreparationSourceRef> Sources,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>Templates and sources frozen at run creation so a rerun is reproducible.</summary>
+public sealed record PreparationSnapshot(
+    string Country,
+    IReadOnlyList<PreparationModuleSnapshot> Modules);
+
+public sealed record PreparationRun(
+    string Id,
+    string ProjectId,
+    string Status,        // Queued | Running | Completed | Failed
+    string Country,
+    string StartedBy,
+    DateTime StartedUtc,
+    DateTime? CompletedUtc,
+    PreparationSnapshot Snapshot);
+
+public sealed record PreparationRunEvent(
+    DateTime OccurredUtc,
+    string Stage,
+    string Severity,      // Info | Warning | Error
+    string Message);
+
+
 // ─── Notifications — L1 ───────────────────────────────────────────────────────
 
 public sealed record UserNotification(

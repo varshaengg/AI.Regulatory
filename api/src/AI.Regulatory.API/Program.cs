@@ -43,6 +43,8 @@ builder.Services.AddSingleton<SubModulesRepository>();
 builder.Services.AddSingleton<AssignmentsRepository>();
 builder.Services.AddSingleton<CommentsRepository>();
 builder.Services.AddSingleton<RunsRepository>();
+builder.Services.AddSingleton<PreparationRunsRepository>();
+builder.Services.AddSingleton<PreparationRunService>();
 builder.Services.AddSingleton<NotificationsRepository>();
 builder.Services.AddSingleton<AdminRepository>();
 builder.Services.AddSingleton<DocTreeRepository>();

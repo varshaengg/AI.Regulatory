@@ -1,0 +1,82 @@
+using AI.Regulatory.API.Contracts;
+
+namespace AI.Regulatory.API.Data;
+
+public enum PreparationRunOutcome { Created, ProjectNotFound, MissingCountry, NothingToProcess }
+
+public sealed record PreparationRunResult(PreparationRunOutcome Outcome, PreparationRun? Run = null, string? Detail = null);
+
+/// <summary>
+/// Creates a preparation run for a project: resolves every module's template (project override, then
+/// country default, then global default) and its source (project override, else tenant default), and
+/// freezes the result as the run snapshot. Later stages (discovery, parsing) read the snapshot only.
+/// </summary>
+public sealed class PreparationRunService
+{
+    private readonly ProjectsRepository _projects;
+    private readonly TemplatesRepository _templates;
+    private readonly ProjectSourcesRepository _sources;
+    private readonly PreparationRunsRepository _runs;
+
+    public PreparationRunService(
+        ProjectsRepository projects,
+        TemplatesRepository templates,
+        ProjectSourcesRepository sources,
+        PreparationRunsRepository runs)
+    {
+        _projects = projects;
+        _templates = templates;
+        _sources = sources;
+        _runs = runs;
+    }
+
+    public async Task<PreparationRunResult> CreateAsync(string projectId, string startedBy, CancellationToken ct)
+    {
+        var project = await _projects.GetAsync(projectId, ct);
+        if (project is null)
+            return new PreparationRunResult(PreparationRunOutcome.ProjectNotFound);
+
+        var country = project.Country?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (country.Length != 2)
+            return new PreparationRunResult(PreparationRunOutcome.MissingCountry, Detail: "The project has no country set.");
+
+        var templates = await _templates.ResolveForProjectAsync(projectId, ct);
+        var sources = await _sources.ByProjectAsync(projectId, ct);
+
+        var modules = CtdModuleCatalog.All.Select(m =>
+        {
+            var warnings = new List<string>();
+            var entry = templates.FirstOrDefault(t => t.ModuleId == m.Id);
+            var template = entry?.Template is { } t
+                ? new PreparationTemplateRef(t.Id, t.FileName, t.Version, t.Country, t.Scope)
+                : null;
+            if (template is null)
+                warnings.Add("No published template resolves for this module.");
+
+            var moduleSources = (sources.FirstOrDefault(s => s.ModuleId == m.Id)?.Sources ?? Array.Empty<ProjectSource>())
+                .Select(s => new PreparationSourceRef(s.Label, s.Path, s.Type, s.IsDefault))
+                .ToArray();
+            if (moduleSources.Length == 0)
+                warnings.Add("No source location is configured for this module.");
+
+            return new PreparationModuleSnapshot(m.Id, m.Label, template, moduleSources, warnings);
+        }).ToArray();
+
+        if (modules.All(m => m.Template is null || m.Sources.Count == 0))
+        {
+            return new PreparationRunResult(
+                PreparationRunOutcome.NothingToProcess,
+                Detail: "No module has both a published template and a source location.");
+        }
+
+        var now = DateTime.UtcNow;
+        var events = new List<PreparationRunEvent>
+        {
+            new(now, "Resolve", "Info", $"Run created for country {country}; {modules.Count(m => m.Template is not null && m.Sources.Count > 0)} of {modules.Length} modules are ready."),
+        };
+        events.AddRange(modules.SelectMany(m => m.Warnings.Select(w => new PreparationRunEvent(now, "Resolve", "Warning", $"{m.ModuleId}: {w}"))));
+
+        var run = await _runs.CreateAsync(projectId, country, startedBy, new PreparationSnapshot(country, modules), events, ct);
+        return new PreparationRunResult(PreparationRunOutcome.Created, run);
+    }
+}
