@@ -1,7 +1,7 @@
 // L2 — Dossier projects catalogue. Loads project list from /api/v1/projects.
 import * as React from "react";
 import { useNavigate } from "react-router";
-import { Search, MoreHorizontal, Plus, Grid, List, Database } from "lucide-react";
+import { Search, MoreHorizontal, Plus, Grid, List, Database, Sparkles } from "lucide-react";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
 import { listProjects } from "../api/resources";
@@ -118,6 +118,16 @@ export default function L2Screen() {
                     style={{ padding: 4, border: "none", background: "none", cursor: "pointer", display: "inline-flex" }}
                   >
                     <Database size={14} color={C.text3} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/screen/L7?projectId=${encodeURIComponent(row.id)}`)}
+                    aria-label={`Prepare dossier for ${row.name}`}
+                    title="Prepare dossier (AI)"
+                    data-id={`prepare-dossier-${row.id}`}
+                    style={{ padding: 4, border: "none", background: "none", cursor: "pointer", display: "inline-flex" }}
+                  >
+                    <Sparkles size={14} color={C.text3} />
                   </button>
                   <MoreHorizontal size={14} color={C.text3} />
                 </td>

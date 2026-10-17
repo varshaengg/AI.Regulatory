@@ -47,6 +47,7 @@ export const screenConfig: Record<string, { title: string; persona: PersonaKey; 
   L4: { title: "New Dossier · Modules", persona: "RALead", intent: "Hero screen — per-module template override, source mapping, and section coverage table." },
   L5: { title: "New Dossier · Launch", persona: "RALead", intent: "Final read-only review of all wizard inputs with cost estimate before launch." },
   L6: { title: "Run Detail · Live", persona: "RALead", intent: "Real-time monitoring of agent progress, sub-section counts, and terminal log." },
+  L7: { title: "Prepare Dossier", persona: "RALead", intent: "Start an AI preparation run for a project: resolve country templates, discover documents from sources, and validate them against module guidelines." },
   U1: { title: "Review Assignments", persona: "RAAuthor", intent: "Three-pane workspace: assignments list, inline section editor, and AI copilot chat." },
   U2: { title: "Copilot Focused", persona: "RAAuthor", intent: "Expanded copilot with rich citation cards, confidence gauge, and slash-command bar." },
   R1: { title: "Compiled Package", persona: "RAReviewer", intent: "Document viewer with collapsible module tree, validation summary, and export actions." },
@@ -87,6 +88,7 @@ export const navGroups: {
     { id: "L4", label: "New dossier · Modules", star: 1, requiredVerb: "Write" },
     { id: "L5", label: "New dossier · Launch", requiredVerb: "Write" },
     { id: "L6", label: "Run detail · Live", requiredVerb: "Read" },
+    { id: "L7", label: "Prepare dossier", requiredVerb: "Read", hidden: true },
   ]},
   { label: "RA Author", featureCode: "Assignments", items: [
     { id: "U1", label: "Review assignments", star: 2 },

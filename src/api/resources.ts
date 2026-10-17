@@ -6,6 +6,7 @@ import type {
   Page,
   ProjectSummary, ProjectDetail, CreateProjectRequest, UpdateProjectRequest,
   CtdTemplate, CtdTemplateModuleEntry, ModuleGuideline, GuidelineRule,
+  PreparationRun, PreparationDocument, PreparationFinding, PreparationRunEvent,
   ProjectSourcesByModule, ProjectSource,
   CreateProjectSourceRequest, UpdateProjectSourceRequest,
   TestSourceConnectionRequest, ConnectionTestResult,
@@ -180,3 +181,19 @@ export const unpublishGuideline = (id: string, signal?: AbortSignal) =>
   api.put<ModuleGuideline>(`/guidelines/${encodeURIComponent(id)}/unpublish`, undefined, signal);
 export const deleteGuideline = (id: string, signal?: AbortSignal) =>
   api.del<void>(`/guidelines/${encodeURIComponent(id)}`, signal);
+
+// AI dossier preparation runs
+export const startDossierRun = (projectId: string, signal?: AbortSignal) =>
+  api.post<PreparationRun>(`/projects/${encodeURIComponent(projectId)}/dossier-runs`, undefined, signal);
+export const listDossierRuns = (projectId: string, signal?: AbortSignal) =>
+  api.get<PreparationRun[]>(`/projects/${encodeURIComponent(projectId)}/dossier-runs`, undefined, signal);
+export const getDossierRun = (id: string, signal?: AbortSignal) =>
+  api.get<PreparationRun>(`/dossier-runs/${encodeURIComponent(id)}`, undefined, signal);
+export const getDossierRunEvents = (id: string, signal?: AbortSignal) =>
+  api.get<PreparationRunEvent[]>(`/dossier-runs/${encodeURIComponent(id)}/events`, undefined, signal);
+export const getDossierRunDocuments = (id: string, signal?: AbortSignal) =>
+  api.get<PreparationDocument[]>(`/dossier-runs/${encodeURIComponent(id)}/documents`, undefined, signal);
+export const getDossierRunFindings = (id: string, signal?: AbortSignal) =>
+  api.get<PreparationFinding[]>(`/dossier-runs/${encodeURIComponent(id)}/findings`, undefined, signal);
+export const revalidateDossierRun = (id: string, signal?: AbortSignal) =>
+  api.post<PreparationFinding[]>(`/dossier-runs/${encodeURIComponent(id)}/validate`, undefined, signal);

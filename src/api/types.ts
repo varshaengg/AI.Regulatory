@@ -379,3 +379,22 @@ export interface ModuleGuideline {
   uploadedBy: string; uploadedOn: string; isPublished: boolean; extractionNote?: string | null;
   rules: GuidelineRule[];
 }
+
+export interface PreparationSourceRef { label: string; path: string; type: string; isDefault: boolean }
+export interface PreparationTemplateRef { id: string; fileName: string; version: string; country: string; scope: string }
+export interface PreparationModuleSnapshot {
+  moduleId: string; label: string; template?: PreparationTemplateRef | null;
+  sources: PreparationSourceRef[]; warnings: string[];
+  guideline?: { id: string; version: string; country: string; rules: GuidelineRule[] } | null;
+}
+export interface PreparationRun {
+  id: string; projectId: string; status: "Queued" | "Running" | "Completed" | "Failed";
+  country: string; startedBy: string; startedUtc: string; completedUtc?: string | null;
+  snapshot: { country: string; modules: PreparationModuleSnapshot[] };
+}
+export interface PreparationDocument {
+  id: string; runId: string; moduleId: string; sourceLabel: string; sourceType: string; blobPath: string;
+  fileName: string; contentType?: string | null; sizeBytes: number; lastModifiedUtc?: string | null; status: string;
+}
+export interface PreparationFinding { documentId: string; ruleKey: string; verdict: "pass" | "flag" | "unclear"; evidence?: string | null }
+export interface PreparationRunEvent { occurredUtc: string; stage: string; severity: "Info" | "Warning" | "Error"; message: string }
