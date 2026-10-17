@@ -61,6 +61,20 @@ jobs:
           "map<<EOF"  | Out-File -Append $env:GITHUB_OUTPUT
           $mini       | Out-File -Append $env:GITHUB_OUTPUT
           "EOF"       | Out-File -Append $env:GITHUB_OUTPUT
+      - name: Resolve existing SQL server region (a server's region is immutable)
+        id: sqlloc
+        shell: pwsh
+        run: |
+          $loc = ''
+          $latest = az deployment sub list `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            -o tsv 2>$null
+          if ($latest) {
+            $rg = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+            if ($rg) { $loc = az sql server list -g $rg --query "[0].location" -o tsv 2>$null }
+          }
+          if ($loc) { Write-Host "Existing SQL server region: $loc (overriding sqlLocation)" }
+          "value=$loc" | Out-File -Append $env:GITHUB_OUTPUT
       - name: az deployment sub what-if
         run: |
           az deployment sub what-if \
@@ -73,7 +87,8 @@ jobs:
                          publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
                          imageTag=${{ vars.IMAGE_TAG }} \
                          deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }} \
-                         extraAppSettingsMap='${{ steps.cfg.outputs.map }}'
+                         extraAppSettingsMap='${{ steps.cfg.outputs.map }}' \
+                         ${{ steps.sqlloc.outputs.value != '' && format('sqlLocation={0}', steps.sqlloc.outputs.value) || '' }}
 
   deploy:
     name: Bicep deploy
@@ -113,6 +128,20 @@ jobs:
           "map<<EOF"  | Out-File -Append $env:GITHUB_OUTPUT
           $mini       | Out-File -Append $env:GITHUB_OUTPUT
           "EOF"       | Out-File -Append $env:GITHUB_OUTPUT
+      - name: Resolve existing SQL server region (a server's region is immutable)
+        id: sqlloc
+        shell: pwsh
+        run: |
+          $loc = ''
+          $latest = az deployment sub list `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            -o tsv 2>$null
+          if ($latest) {
+            $rg = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
+            if ($rg) { $loc = az sql server list -g $rg --query "[0].location" -o tsv 2>$null }
+          }
+          if ($loc) { Write-Host "Existing SQL server region: $loc (overriding sqlLocation)" }
+          "value=$loc" | Out-File -Append $env:GITHUB_OUTPUT
       - name: Bicep deploy (subscription scope)
         id: bicep
         run: |
@@ -129,6 +158,7 @@ jobs:
                          publisherAcrLoginServer=${{ vars.PUBLISHER_ACR_LOGIN }} \
                          imageTag=${{ vars.IMAGE_TAG }} \
                          deployerObjectId=${{ secrets.DEPLOYER_OBJECT_ID }} \
-                         extraAppSettingsMap='${{ steps.cfg.outputs.map }}'
+                         extraAppSettingsMap='${{ steps.cfg.outputs.map }}' \
+                         ${{ steps.sqlloc.outputs.value != '' && format('sqlLocation={0}', steps.sqlloc.outputs.value) || '' }}
           echo "Outputs:"
           az deployment sub show --name "$NAME" --query "properties.outputs" -o json
