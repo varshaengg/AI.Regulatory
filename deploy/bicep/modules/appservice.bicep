@@ -32,6 +32,9 @@ param sqlConnectionKvRef string = ''
 
 param openAiEndpoint string = ''
 param searchEndpoint string = ''
+param serviceBusNamespace string = ''
+param dossierQueueName string = ''
+param documentIntelligenceEndpoint string = ''
 param appInsightsConnString string = ''
 
 @description('Extra runtime app-settings merged into siteConfig.appSettings (e.g. CORS origins, Entra IDs, feature flags). Sourced from deploy/config/appsettings.<feature>.<env>.json by the pipeline.')
@@ -76,7 +79,10 @@ var apiOnlySettings = isWeb ? [] : concat(
   empty(keyVaultUri)        ? [] : [ { name: 'KeyVault__Uri',              value: keyVaultUri } ],
   empty(sqlConnectionKvRef) ? [] : [ { name: 'ConnectionStrings__ArtaSql', value: sqlConnectionKvRef } ],
   empty(openAiEndpoint)     ? [] : [ { name: 'AzureOpenAi__Endpoint',      value: openAiEndpoint } ],
-  empty(searchEndpoint)     ? [] : [ { name: 'AzureAISearch__Endpoint',    value: searchEndpoint } ]
+  empty(searchEndpoint)     ? [] : [ { name: 'AzureAISearch__Endpoint',    value: searchEndpoint } ],
+empty(serviceBusNamespace) ? [] : [ { name: 'ServiceBus__FullyQualifiedNamespace', value: serviceBusNamespace } ],
+empty(dossierQueueName)    ? [] : [ { name: 'ServiceBus__DossierQueue', value: dossierQueueName } ],
+empty(documentIntelligenceEndpoint) ? [] : [ { name: 'DocumentIntelligence__Endpoint', value: documentIntelligenceEndpoint } ]
 )
 
 var webOnlySettings = !isWeb ? [] : [

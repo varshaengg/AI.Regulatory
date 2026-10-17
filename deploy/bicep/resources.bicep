@@ -76,6 +76,8 @@ var kindShort = {
   logAnalytics:      'log'
   appInsights:       'appi'
   openAi:            'oai'
+  serviceBus:        'sb'
+  documentIntelligence: 'di'
   search:            'srch'
   containerRegistry: 'cr'
 }
@@ -97,6 +99,8 @@ var wantStorage       = hasKind(resources, 'storage')
 var wantSql           = hasKind(resources, 'sqlServer')
 var wantSearch        = hasKind(resources, 'search')
 var wantOpenAi        = hasKind(resources, 'openAi')
+var wantServiceBus     = hasKind(resources, 'serviceBus')
+var wantDocIntel       = hasKind(resources, 'documentIntelligence')
 var wantAppPlan       = hasKind(resources, 'appServicePlan') || length(appServiceEntries) > 0
 var wantWorkloadIdentity = hasKind(resources, 'managedIdentity')
 
@@ -114,6 +118,8 @@ var stName     = name(kindShort, 'storage',        namePrefix, '')
 var sqlName    = name(kindShort, 'sqlServer',      namePrefix, '')
 var srchName   = name(kindShort, 'search',         namePrefix, '')
 var oaiName    = name(kindShort, 'openAi',         namePrefix, '')
+var sbName     = name(kindShort, 'serviceBus',     namePrefix, '')
+var diName     = name(kindShort, 'documentIntelligence', namePrefix, '')
 var planName   = name(kindShort, 'appServicePlan', namePrefix, '')
 var midName    = name(kindShort, 'managedIdentity', namePrefix, 'workload')
 
@@ -200,8 +206,34 @@ module openai 'modules/openai.bicep' = if (wantOpenAi) {
     openAiName:               oaiName
     location:                 location
     tags:                     tags
+    workloadIdentityPrincipalId: workloadIdentity.?outputs.principalId ?? ''
     logAnalyticsWorkspaceId:  monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
     enableDiagnostics:        wantLogAnalytics
+  }
+}
+
+module serviceBus 'modules/servicebus.bicep' = if (wantServiceBus) {
+  name: 'mod-servicebus'
+  params: {
+    serviceBusName:              sbName
+    location:                    location
+    tags:                        tags
+    sku:                         sizingTier == 'dev' ? 'Standard' : 'Premium'
+    workloadIdentityPrincipalId: workloadIdentity.?outputs.principalId ?? ''
+    logAnalyticsWorkspaceId:     monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
+    enableDiagnostics:           wantLogAnalytics
+  }
+}
+
+module docIntel 'modules/documentintelligence.bicep' = if (wantDocIntel) {
+  name: 'mod-documentintelligence'
+  params: {
+    documentIntelligenceName:    diName
+    location:                    location
+    tags:                        tags
+    workloadIdentityPrincipalId: workloadIdentity.?outputs.principalId ?? ''
+    logAnalyticsWorkspaceId:     monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
+    enableDiagnostics:           wantLogAnalytics
   }
 }
 
@@ -238,6 +270,9 @@ module appServices 'modules/appservice.bicep' = [for (svc, i) in appServiceEntri
                            : ''
     openAiEndpoint:        openai.?outputs.openAiEndpoint ?? ''
     searchEndpoint:        search.?outputs.searchEndpoint ?? ''
+    serviceBusNamespace:   serviceBus.?outputs.serviceBusNamespace ?? ''
+    dossierQueueName:      serviceBus.?outputs.dossierQueueName ?? ''
+    documentIntelligenceEndpoint: docIntel.?outputs.documentIntelligenceEndpoint ?? ''
     appInsightsConnString: monitoring.?outputs.appInsightsConnectionString ?? ''
     extraAppSettings:      contains(extraAppSettingsMap, svc.feature) ? extraAppSettingsMap[svc.feature] : []
     enableStagingSlot:     !startsWith(s.appServiceSku, 'B')
@@ -264,3 +299,5 @@ output workloadIdentityClientId    string = workloadIdentity.?outputs.clientId  
 output workloadIdentityResourceId  string = workloadIdentity.?outputs.resourceId  ?? ''
 output searchEndpoint string = search.?outputs.searchEndpoint ?? ''
 output openAiEndpoint string = openai.?outputs.openAiEndpoint ?? ''
+output serviceBusNamespace string = serviceBus.?outputs.serviceBusNamespace ?? ''
+output documentIntelligenceEndpoint string = docIntel.?outputs.documentIntelligenceEndpoint ?? ''

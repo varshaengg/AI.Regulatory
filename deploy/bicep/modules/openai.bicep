@@ -4,6 +4,7 @@ param location string
 param tags object
 param logAnalyticsWorkspaceId string = ''
 param enableDiagnostics bool = false
+param workloadIdentityPrincipalId string = ''
 
 @description('Deployment capacity for gpt-4o-mini in kTPM')
 param gpt4oMiniCapacity int = 30
@@ -51,6 +52,17 @@ resource depEmbed 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' 
     versionUpgradeOption: 'OnceCurrentVersionExpired'
   }
   dependsOn: [ depMini ] // serialize to avoid quota contention
+}
+
+// Cognitive Services OpenAI User
+resource workloadRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(workloadIdentityPrincipalId)) {
+  scope: account
+  name: guid(account.id, workloadIdentityPrincipalId, '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
+  properties: {
+    principalId: workloadIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
+  }
 }
 
 resource aoaiDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableDiagnostics && !empty(logAnalyticsWorkspaceId)) {
