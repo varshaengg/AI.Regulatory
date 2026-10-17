@@ -566,6 +566,28 @@ copied directly from the conceptual SDD.
 All write endpoints use existing permission policies, audit correlation, and
 optimistic concurrency.
 
+### 10.1 Implemented in the first slice (status)
+
+Implemented routes differ from the target table above in these ways.
+
+| Method | Route | Notes |
+|---|---|---|
+| POST | `/templates/{id}/parse` | Synchronous parse (replaces `parse-runs`); Document Intelligence + Azure OpenAI propose nodes, saved as a Draft |
+| GET/PUT | `/templates/{id}/draft-structure` | PUT with `approve=true` validates and sets Approved; publish is not yet gated on approval |
+| POST/GET | `/projects/{id}/dossier-runs` | Create resolves templates, sources and published guidelines into the run snapshot, then enqueues to Service Bus |
+| GET | `/dossier-runs/{id}`, `/events`, `/documents`, `/findings` | Run status, stage events, discovered documents, advisory findings |
+| POST | `/dossier-runs/{id}/discover`, `/validate` | Inline re-run of a stage |
+| GET/POST/PUT/DELETE | `/guidelines...` | Per-module guideline upload, rule review, publish/unpublish (section 7A) |
+
+Processing runs in the separate Service Bus worker (queue `dossier-runs`):
+Running, then Discover (Blob), then Validate (advisory, capped at 50 documents), then Completed.
+Findings carry a verdict of pass, flag or unclear and are never blocking.
+
+UI: A8 (module guidelines), A2 structure panel (parse, edit, approve), L7 (start run, progress, documents, findings).
+
+Not yet implemented: classification, slot mapping, gap analysis, remediation, compilation,
+finding accept/dismiss with audit, DOCX guideline extraction, and gating publish on an Approved structure.
+
 ## 11. Reliability and Error Handling
 
 - Service Bus messages use explicit retry limits and dead-letter queues.
