@@ -71,7 +71,11 @@ jobs:
             -o tsv 2>$null
           if ($latest) {
             $rg = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
-            if ($rg) { $loc = az sql server list -g $rg --query "[0].location" -o tsv 2>$null }
+            if ($rg) {
+              az sql server list -g $rg --query "[].{name:name,location:location}" -o tsv 2>$null | Write-Host
+              $np = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value" -o tsv
+              $loc = az sql server list -g $rg --query "[?name=='sql-$np'].location | [0]" -o tsv 2>$null
+            }
           }
           if ($loc) { Write-Host "Existing SQL server region: $loc (overriding sqlLocation)" }
           "value=$loc" | Out-File -Append $env:GITHUB_OUTPUT
@@ -138,7 +142,11 @@ jobs:
             -o tsv 2>$null
           if ($latest) {
             $rg = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
-            if ($rg) { $loc = az sql server list -g $rg --query "[0].location" -o tsv 2>$null }
+            if ($rg) {
+              az sql server list -g $rg --query "[].{name:name,location:location}" -o tsv 2>$null | Write-Host
+              $np = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value" -o tsv
+              $loc = az sql server list -g $rg --query "[?name=='sql-$np'].location | [0]" -o tsv 2>$null
+            }
           }
           if ($loc) { Write-Host "Existing SQL server region: $loc (overriding sqlLocation)" }
           "value=$loc" | Out-File -Append $env:GITHUB_OUTPUT
