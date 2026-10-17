@@ -4,9 +4,9 @@ import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { C, personas, screenConfig, type PersonaKey } from "./tokens";
 
 type BtnVariant = "primary" | "secondary" | "subtle" | "danger";
-export function Btn({ variant = "primary" as BtnVariant, children, onClick, disabled = false, style = {} }: {
-  variant?: BtnVariant; children: React.ReactNode; onClick?: () => void; disabled?: boolean; style?: React.CSSProperties;
-}) {
+export function Btn({ variant = "primary" as BtnVariant, children, onClick, disabled = false, style = {}, title, ...rest }: {
+  variant?: BtnVariant; children: React.ReactNode; onClick?: () => void; disabled?: boolean; style?: React.CSSProperties; title?: string;
+} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "disabled" | "style" | "title" | "children">) {
   const base: React.CSSProperties = {
     display: "inline-flex", alignItems: "center", gap: "6px",
     padding: "5px 12px", fontSize: "13px", fontWeight: 500,
@@ -19,8 +19,9 @@ export function Btn({ variant = "primary" as BtnVariant, children, onClick, disa
     subtle: { backgroundColor: "transparent", color: C.brand, borderColor: "transparent" },
     danger: { backgroundColor: C.danger, color: "white", borderColor: "transparent" },
   };
-  return (
+  const button = (
     <button
+      {...rest}
       style={{
         ...base,
         ...variants[variant],
@@ -34,6 +35,8 @@ export function Btn({ variant = "primary" as BtnVariant, children, onClick, disa
       {children}
     </button>
   );
+  // Disabled buttons swallow hover events, so the tooltip lives on a wrapper.
+  return title ? <span title={title} style={{ display: "inline-block" }}>{button}</span> : button;
 }
 
 type ChipColor = "success" | "warning" | "danger" | "brand" | "neutral" | "disabled";
