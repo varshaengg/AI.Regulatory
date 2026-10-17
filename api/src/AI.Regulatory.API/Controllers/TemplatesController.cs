@@ -106,6 +106,35 @@ public sealed partial class TemplatesController : ControllerBase
             detail: $"No active global CTD template '{id}' exists.");
     }
 
+    /// <summary>Moves a published, non-default template back to In review.</summary>
+    [HttpPut("{id}/unpublish")]
+    [Authorize(Policy = AuthPolicies.TemplatesAdmin)]
+    [ProducesResponseType(typeof(CtdTemplate), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<CtdTemplate>> Unpublish(string id, CancellationToken ct)
+    {
+        var (saved, isDefault) = await _repo.UnpublishAsync(id, ct);
+        if (saved is null)
+        {
+            return Problem(
+                type: ErrorTypes.NotFound,
+                title: "Template not found",
+                statusCode: StatusCodes.Status404NotFound,
+                detail: $"No active CTD template '{id}' exists.");
+        }
+
+        if (isDefault)
+        {
+            return Problem(
+                title: "Template is the default",
+                statusCode: StatusCodes.Status409Conflict,
+                detail: "Set another template as the default before moving this one to review.");
+        }
+
+        return Ok(saved);
+    }
+
     [GeneratedRegex("^[A-Z]{2}$")]
     private static partial Regex CountryCode();
 

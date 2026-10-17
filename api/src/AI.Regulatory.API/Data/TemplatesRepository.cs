@@ -189,6 +189,27 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         return rows == 0 ? null : await GetFromStoreAsync(id, ct);
     }
 
+    /// <summary>Moves a non-default template back to In review. Returns null when not found, false-state via exception-free flag.</summary>
+    public async Task<(CtdTemplate? Template, bool IsDefault)> UnpublishAsync(string id, CancellationToken ct)
+    {
+        var current = await GetAsync(id, ct);
+        if (current is null || current.Status == "Archived") return (null, false);
+        if (current.IsDefault) return (current, true);
+
+        if (IsMocked)
+        {
+            var index = SeedList.FindIndex(t => MatchesId(t, id));
+            SeedList[index] = current with { IsPublished = false };
+            return (SeedList[index], false);
+        }
+
+        await using var c = await _sql.OpenAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition(
+            "UPDATE [dbo].[CtdTemplate] SET [IsPublished] = 0 WHERE [Id] = @templateId AND [IsDefault] = 0;",
+            new { templateId = Guid.Parse(id) }, cancellationToken: ct));
+        return (await GetFromStoreAsync(id, ct), false);
+    }
+
     public async Task<CtdTemplate?> UpsertProjectOverrideAsync(
         string projectId,
         string moduleId,

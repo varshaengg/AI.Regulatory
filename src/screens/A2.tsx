@@ -4,7 +4,7 @@ import { Search, Trash2, Upload } from "lucide-react";
 import { useNavigate } from "react-router";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
-import { deleteGlobalTemplate, listTemplates, publishTemplate, setDefaultTemplate } from "../api/resources";
+import { deleteGlobalTemplate, listTemplates, publishTemplate, setDefaultTemplate, unpublishTemplate } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 import type { CtdTemplate } from "../api/types";
 
@@ -42,6 +42,19 @@ export default function A2Screen() {
       setRefreshKey(k => k + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to publish template.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const unpublishRow = async (row: CtdTemplate) => {
+    setBusyId(row.id);
+    setActionError(null);
+    try {
+      await unpublishTemplate(row.id);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to move template to review.");
     } finally {
       setBusyId(null);
     }
@@ -165,6 +178,17 @@ export default function A2Screen() {
                       aria-label={`Set ${row.fileName || row.moduleId} as default for ${row.country} ${row.moduleId}`}
                     >
                       Set as default
+                    </Btn>
+                  )}
+                  {row.isPublished !== false && !row.isDefault && (
+                    <Btn
+                      variant="subtle"
+                      style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}
+                      disabled={busyId !== null}
+                      onClick={() => unpublishRow(row)}
+                      data-id={`unpublish-template-${row.id}`}
+                    >
+                      Unpublish
                     </Btn>
                   )}
                   {row.scope === "Global" && <Btn

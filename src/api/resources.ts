@@ -54,6 +54,8 @@ export const setDefaultTemplate = (id: string, signal?: AbortSignal) =>
   api.put<CtdTemplate>(`/templates/${encodeURIComponent(id)}/default`, undefined, signal);
 export const publishTemplate = (id: string, signal?: AbortSignal) =>
   api.put<CtdTemplate>(`/templates/${encodeURIComponent(id)}/publish`, undefined, signal);
+export const unpublishTemplate = (id: string, signal?: AbortSignal) =>
+  api.put<CtdTemplate>(`/templates/${encodeURIComponent(id)}/unpublish`, undefined, signal);
 export const deleteGlobalTemplate = (id: string, signal?: AbortSignal) =>
   api.del<void>(`/templates/${encodeURIComponent(id)}`, signal);
 export const getProjectTemplates = (projectId: string, signal?: AbortSignal) =>
