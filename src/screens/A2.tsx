@@ -157,40 +157,41 @@ export default function A2Screen() {
                 <td style={{ ...td, color: C.text3 }}>{new Date(row.uploadedOn).toISOString().slice(0, 10)}</td>
                 <td style={td}>{row.isPublished === false ? <Chip color="warning">In review</Chip> : <Chip color={statusColor[row.status]}>{row.status}</Chip>}</td>
                 <td style={td}>
-                  {row.isPublished === false && (
-                    <Btn
-                      variant="subtle"
-                      style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}
-                      disabled={busyId !== null}
-                      onClick={() => publishRow(row)}
-                      data-id={`publish-template-${row.id}`}
-                    >
-                      Publish
-                    </Btn>
-                  )}
-                  {!row.isDefault && row.isPublished !== false && (
-                    <Btn
-                      variant="subtle"
-                      style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}
-                      disabled={busyId !== null}
-                      onClick={() => markDefault(row)}
-                      data-id={`set-default-template-${row.id}`}
-                      aria-label={`Set ${row.fileName || row.moduleId} as default for ${row.country} ${row.moduleId}`}
-                    >
-                      Set as default
-                    </Btn>
-                  )}
-                  {row.isPublished !== false && !row.isDefault && (
-                    <Btn
-                      variant="subtle"
-                      style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}
-                      disabled={busyId !== null}
-                      onClick={() => unpublishRow(row)}
-                      data-id={`unpublish-template-${row.id}`}
-                    >
-                      Unpublish
-                    </Btn>
-                  )}
+                  {row.scope === "Global" && (() => {
+                    const inReview = row.isPublished === false;
+                    const btn = { fontSize: 11, padding: "3px 8px", marginRight: 4 };
+                    return (
+                      <>
+                        {inReview ? (
+                          <Btn variant="subtle" style={btn} disabled={busyId !== null} onClick={() => publishRow(row)} data-id={`publish-template-${row.id}`}>
+                            Publish
+                          </Btn>
+                        ) : (
+                          <Btn
+                            variant="subtle"
+                            style={btn}
+                            disabled={busyId !== null || row.isDefault}
+                            title={row.isDefault ? "Set another template as default before unpublishing this one." : undefined}
+                            onClick={() => unpublishRow(row)}
+                            data-id={`unpublish-template-${row.id}`}
+                          >
+                            Unpublish
+                          </Btn>
+                        )}
+                        <Btn
+                          variant="subtle"
+                          style={btn}
+                          disabled={busyId !== null || row.isDefault || inReview}
+                          title={row.isDefault ? "Already the default." : inReview ? "Publish the template first." : undefined}
+                          onClick={() => markDefault(row)}
+                          data-id={`set-default-template-${row.id}`}
+                          aria-label={`Set ${row.fileName || row.moduleId} as default for ${row.country} ${row.moduleId}`}
+                        >
+                          Set as default
+                        </Btn>
+                      </>
+                    );
+                  })()}
                   {row.scope === "Global" && <Btn
                     variant="subtle"
                     style={{ fontSize: 11, padding: "3px 8px", color: C.danger }}
