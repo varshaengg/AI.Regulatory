@@ -17,6 +17,7 @@ public sealed class PreparationRunsRepository
     private readonly bool _isMocked;
     private readonly ConcurrentDictionary<string, PreparationRun> _runs = new();
     private readonly ConcurrentDictionary<string, List<PreparationRunEvent>> _events = new();
+    private readonly ConcurrentDictionary<string, List<PreparationDocument>> _documents = new();
 
     public PreparationRunsRepository(IOptions<DataOptions> options, ISqlConnectionFactory sql)
     {
@@ -117,6 +118,90 @@ public sealed class PreparationRunsRepository
             """
             SELECT [OccurredUtc], [Stage], [Severity], [Message]
             FROM [dbo].[DossierRunEvent] WHERE [DossierRunId] = @guid ORDER BY [Id];
+            """,
+            new { guid }, cancellationToken: ct));
+        return rows.ToArray();
+    }
+
+    public async Task AddEventsAsync(string runId, IReadOnlyList<PreparationRunEvent> events, CancellationToken ct)
+    {
+        if (events.Count == 0) return;
+
+        if (_isMocked)
+        {
+            _events.GetOrAdd(runId, _ => new List<PreparationRunEvent>()).AddRange(events);
+            return;
+        }
+
+        var guid = Guid.Parse(runId);
+        await using var c = await _sql.OpenAsync(ct);
+        foreach (var e in events)
+        {
+            await c.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO [dbo].[DossierRunEvent] ([DossierRunId], [OccurredUtc], [Stage], [Severity], [Message])
+                VALUES (@guid, @OccurredUtc, @Stage, @Severity, LEFT(@Message, 1000));
+                """,
+                new { guid, e.OccurredUtc, e.Stage, e.Severity, e.Message }, cancellationToken: ct));
+        }
+    }
+
+    public async Task SetStatusAsync(string runId, string status, CancellationToken ct)
+    {
+        var code = (byte)Array.IndexOf(StatusNames, status);
+        if (_isMocked)
+        {
+            if (_runs.TryGetValue(runId, out var run))
+                _runs[runId] = run with { Status = status };
+            return;
+        }
+
+        await using var c = await _sql.OpenAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition(
+            "UPDATE [dbo].[DossierRun] SET [Status] = @code WHERE [Id] = @guid;",
+            new { code, guid = Guid.Parse(runId) }, cancellationToken: ct));
+    }
+
+    /// <summary>Replaces the run's discovered documents, so discovery can be re-run safely.</summary>
+    public async Task ReplaceDocumentsAsync(string runId, IReadOnlyList<PreparationDocument> documents, CancellationToken ct)
+    {
+        if (_isMocked)
+        {
+            _documents[runId] = documents.ToList();
+            return;
+        }
+
+        var guid = Guid.Parse(runId);
+        await using var c = await _sql.OpenAsync(ct);
+        await using var tx = await c.BeginTransactionAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition("DELETE FROM [dbo].[DossierDocument] WHERE [DossierRunId] = @guid;", new { guid }, tx, cancellationToken: ct));
+        foreach (var d in documents)
+        {
+            await c.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO [dbo].[DossierDocument] ([DossierRunId], [ModuleId], [SourceLabel], [SourceType], [BlobPath], [FileName], [ContentType], [SizeBytes], [LastModifiedUtc], [Status])
+                VALUES (@guid, @ModuleId, @SourceLabel, @SourceType, @BlobPath, @FileName, @ContentType, @SizeBytes, @LastModifiedUtc, @Status);
+                """,
+                new { guid, d.ModuleId, d.SourceLabel, d.SourceType, d.BlobPath, d.FileName, d.ContentType, d.SizeBytes, d.LastModifiedUtc, d.Status },
+                tx, cancellationToken: ct));
+        }
+        await tx.CommitAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<PreparationDocument>> ListDocumentsAsync(string runId, CancellationToken ct)
+    {
+        if (_isMocked)
+            return _documents.TryGetValue(runId, out var list) ? list.ToArray() : Array.Empty<PreparationDocument>();
+
+        if (!Guid.TryParse(runId, out var guid))
+            return Array.Empty<PreparationDocument>();
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.QueryAsync<PreparationDocument>(new CommandDefinition(
+            """
+            SELECT CONVERT(VARCHAR(36), [Id]) AS [Id], CONVERT(VARCHAR(36), [DossierRunId]) AS [RunId], [ModuleId], [SourceLabel], [SourceType],
+                   [BlobPath], [FileName], [ContentType], [SizeBytes], [LastModifiedUtc], [Status]
+            FROM [dbo].[DossierDocument] WHERE [DossierRunId] = @guid ORDER BY [ModuleId], [FileName];
             """,
             new { guid }, cancellationToken: ct));
         return rows.ToArray();

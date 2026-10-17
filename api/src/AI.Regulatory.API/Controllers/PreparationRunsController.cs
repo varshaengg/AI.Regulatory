@@ -71,6 +71,27 @@ public sealed class PreparationRunsController : ControllerBase
         return Ok(await _repo.ListEventsAsync(id, ct));
     }
 
+    /// <summary>Runs the discovery stage inline. The Service Bus worker will take this over.</summary>
+    [HttpPost("dossier-runs/{id}/discover")]
+    [Authorize(Policy = AuthPolicies.DossierManagementWrite)]
+    [ProducesResponseType(typeof(IReadOnlyList<PreparationDocument>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<PreparationDocument>>> Discover(string id, CancellationToken ct)
+    {
+        var documents = await _service.DiscoverAsync(id, ct);
+        return documents is null ? RunNotFound(id) : Ok(documents);
+    }
+
+    [HttpGet("dossier-runs/{id}/documents")]
+    [ProducesResponseType(typeof(IReadOnlyList<PreparationDocument>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<PreparationDocument>>> Documents(string id, CancellationToken ct)
+    {
+        if (await _repo.GetAsync(id, ct) is null)
+            return RunNotFound(id);
+        return Ok(await _repo.ListDocumentsAsync(id, ct));
+    }
+
     private ActionResult RunNotFound(string id)
         => Problem(type: ErrorTypes.NotFound, title: "Run not found",
             statusCode: StatusCodes.Status404NotFound, detail: $"No dossier run with id '{id}'.");

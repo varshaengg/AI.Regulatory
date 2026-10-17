@@ -28,6 +28,15 @@ public interface ISourceConnectivityValidator
 /// </summary>
 public sealed class SourceConnectivityValidator : ISourceConnectivityValidator
 {
+    private readonly IEnumerable<ISourceDocumentLister> _listers;
+    private readonly bool _isMocked;
+
+    public SourceConnectivityValidator(IEnumerable<ISourceDocumentLister> listers, Microsoft.Extensions.Options.IOptions<DataOptions> options)
+    {
+        _listers = listers;
+        _isMocked = options.Value.IsMocked;
+    }
+
     private static readonly TimeSpan RoundTripBudget = TimeSpan.FromSeconds(10);
     private const int SampleListSize = 5;
 
@@ -62,7 +71,7 @@ public sealed class SourceConnectivityValidator : ISourceConnectivityValidator
         }
     }
 
-    private static async Task<(bool Success, string Message, int? ItemsFound)> ProbeAsync(
+    private async Task<(bool Success, string Message, int? ItemsFound)> ProbeAsync(
         string type, string path, CancellationToken ct)
     {
         // (a) Path/permission check — every supported connector addresses a resource
@@ -72,6 +81,21 @@ public sealed class SourceConnectivityValidator : ISourceConnectivityValidator
 
         if (segments.Length < 2)
             return (false, "Path must include at least an account/site segment and a container/library segment (e.g. 'account/container/prefix').", null);
+
+        // Live mode: a real listing through the managed identity replaces the simulation.
+        var lister = _isMocked ? null : _listers.FirstOrDefault(l => l.Supports(type));
+        if (lister is not null)
+        {
+            try
+            {
+                var items = await lister.ListAsync(path!, SampleListSize, ct);
+                return (true, $"Connected to container '{segments[1]}'. Listed {items.Count} item(s).", items.Count);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return (false, $"Could not read the location: {ex.GetType().Name}. Check the path and that the app identity has Storage Blob Data Reader.", null);
+            }
+        }
 
         // (c) Simulated network round-trip, well inside the 10s budget.
         await Task.Delay(Random.Shared.Next(80, 260), ct);

@@ -281,6 +281,19 @@ public sealed record PreparationRun(
     DateTime? CompletedUtc,
     PreparationSnapshot Snapshot);
 
+public sealed record PreparationDocument(
+    string Id,
+    string RunId,
+    string ModuleId,
+    string SourceLabel,
+    string SourceType,
+    string BlobPath,
+    string FileName,
+    string? ContentType,
+    long SizeBytes,
+    DateTime? LastModifiedUtc,
+    string Status);       // Discovered
+
 public sealed record PreparationRunEvent(
     DateTime OccurredUtc,
     string Stage,

@@ -17,17 +17,71 @@ public sealed class PreparationRunService
     private readonly TemplatesRepository _templates;
     private readonly ProjectSourcesRepository _sources;
     private readonly PreparationRunsRepository _runs;
+    private readonly IEnumerable<ISourceDocumentLister> _listers;
+    private readonly ILogger<PreparationRunService> _log;
+    private const int MaxDocumentsPerSource = 500;
 
     public PreparationRunService(
         ProjectsRepository projects,
         TemplatesRepository templates,
         ProjectSourcesRepository sources,
-        PreparationRunsRepository runs)
+        PreparationRunsRepository runs,
+        IEnumerable<ISourceDocumentLister> listers,
+        ILogger<PreparationRunService> log)
     {
+        _listers = listers;
+        _log = log;
         _projects = projects;
         _templates = templates;
         _sources = sources;
         _runs = runs;
+    }
+
+    /// <summary>
+    /// Discovery stage: lists documents in every source of every module that has a template, as
+    /// recorded in the run snapshot. A failing source is logged and skipped; it never fails the run.
+    /// </summary>
+    public async Task<IReadOnlyList<PreparationDocument>?> DiscoverAsync(string runId, CancellationToken ct)
+    {
+        var run = await _runs.GetAsync(runId, ct);
+        if (run is null) return null;
+
+        await _runs.SetStatusAsync(runId, "Running", ct);
+        var documents = new List<PreparationDocument>();
+        var events = new List<PreparationRunEvent>();
+
+        foreach (var module in run.Snapshot.Modules.Where(m => m.Template is not null))
+        {
+            foreach (var source in module.Sources)
+            {
+                var lister = _listers.FirstOrDefault(l => l.Supports(source.Type));
+                if (lister is null)
+                {
+                    events.Add(new(DateTime.UtcNow, "Discover", "Warning", $"{module.ModuleId}: source '{source.Label}' type '{source.Type}' is not supported yet; skipped."));
+                    continue;
+                }
+
+                try
+                {
+                    var found = await lister.ListAsync(source.Path, MaxDocumentsPerSource, ct);
+                    documents.AddRange(found.Select(d => new PreparationDocument(
+                        Guid.NewGuid().ToString(), runId, module.ModuleId, source.Label, source.Type,
+                        d.BlobPath, d.FileName, d.ContentType, d.SizeBytes, d.LastModifiedUtc, "Discovered")));
+                    events.Add(new(DateTime.UtcNow, "Discover", "Info", $"{module.ModuleId}: found {found.Count} document(s) in '{source.Label}'."));
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _log.LogWarning(ex, "Discovery failed for run {RunId} module {Module} source {Source}", runId, module.ModuleId, source.Label);
+                    events.Add(new(DateTime.UtcNow, "Discover", "Error", $"{module.ModuleId}: could not read '{source.Label}' ({ex.GetType().Name})."));
+                }
+            }
+        }
+
+        await _runs.ReplaceDocumentsAsync(runId, documents, ct);
+        events.Add(new(DateTime.UtcNow, "Discover", "Info", $"Discovery finished: {documents.Count} document(s)."));
+        await _runs.AddEventsAsync(runId, events, ct);
+        await _runs.SetStatusAsync(runId, "Completed", ct);
+        return documents;
     }
 
     public async Task<PreparationRunResult> CreateAsync(string projectId, string startedBy, CancellationToken ct)
