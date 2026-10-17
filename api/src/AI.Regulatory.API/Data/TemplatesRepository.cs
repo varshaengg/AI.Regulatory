@@ -20,9 +20,11 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
     public async Task<IReadOnlyList<CtdTemplateModuleEntry>> ResolveForProjectAsync(string projectId, CancellationToken ct)
     {
         var all = await ListAsync(ct);
-        var projectTemplates = all
+        var ownTemplates = all
             .Where(t => string.Equals(t.ProjectId, projectId, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+        var projectTemplates = ownTemplates.Where(t => t.IsPublished).ToArray();
+        var pendingReview = ownTemplates.Where(t => !t.IsPublished).ToArray();
         var globalDefaults = all
             .Where(t => string.Equals(t.Scope, "Global", StringComparison.OrdinalIgnoreCase) && t.IsDefault)
             .ToArray();
@@ -40,7 +42,8 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             var template = tiers
                 .Select(tier => tier.FirstOrDefault(t => SameModule(t, module.Id)) ?? tier.FirstOrDefault(t => SameModule(t, AllModules)))
                 .FirstOrDefault(t => t is not null);
-            return new CtdTemplateModuleEntry(module.Id, module.Label, module.Color, template);
+            var pending = pendingReview.FirstOrDefault(t => SameModule(t, module.Id));
+            return new CtdTemplateModuleEntry(module.Id, module.Label, module.Color, template, pending);
         }).ToArray();
     }
 
@@ -144,9 +147,17 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
     {
         if (IsMocked)
         {
-            var index = SeedList.FindIndex(t => MatchesId(t, id) && t.Scope == "Global" && t.Status != "Archived");
+            var index = SeedList.FindIndex(t => MatchesId(t, id) && t.Status != "Archived");
             if (index < 0) return null;
             var current = SeedList[index];
+            if (current.ProjectId is not null)
+            {
+                SeedList.RemoveAll(t => t.ProjectId == current.ProjectId && SameModule(t, current.ModuleId) && t.IsPublished && t.Status != "Archived");
+                index = SeedList.FindIndex(t => MatchesId(t, id));
+                SeedList[index] = current with { IsPublished = true };
+                return SeedList[index];
+            }
+
             var hasDefault = SeedList.Any(t => IsGlobalDefault(t, current.Country, current.ModuleId));
             SeedList[index] = current with { IsPublished = true, IsDefault = current.IsDefault || !hasDefault };
             return SeedList[index];
@@ -156,15 +167,23 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             return null;
 
         await using var c = await _sql.OpenAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE o SET [Status] = N'Archived'
+            FROM [dbo].[CtdTemplate] o
+            JOIN [dbo].[CtdTemplate] n ON n.[Id] = @templateId AND n.[ProjectId] = o.[ProjectId] AND n.[ModuleId] = o.[ModuleId]
+            WHERE o.[Id] <> n.[Id] AND o.[IsPublished] = 1 AND o.[Status] <> N'Archived';
+            """,
+            new { templateId }, cancellationToken: ct));
         var rows = await c.ExecuteAsync(new CommandDefinition(
             """
             UPDATE t SET [IsPublished] = 1,
-                   [IsDefault] = CASE WHEN t.[IsDefault] = 1 OR NOT EXISTS (
+                   [IsDefault] = CASE WHEN t.[ProjectId] IS NOT NULL THEN 0 WHEN t.[IsDefault] = 1 OR NOT EXISTS (
                        SELECT 1 FROM [dbo].[CtdTemplate] d
                        WHERE d.[ProjectId] IS NULL AND d.[Country] = t.[Country] AND d.[ModuleId] = t.[ModuleId]
                          AND d.[IsDefault] = 1 AND d.[Status] <> N'Archived') THEN 1 ELSE 0 END
             FROM [dbo].[CtdTemplate] t
-            WHERE t.[Id] = @templateId AND t.[ProjectId] IS NULL AND t.[Status] <> N'Archived';
+            WHERE t.[Id] = @templateId AND t.[Status] <> N'Archived';
             """,
             new { templateId }, cancellationToken: ct));
         return rows == 0 ? null : await GetFromStoreAsync(id, ct);
@@ -177,18 +196,19 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         string originalFileName,
         string storagePath,
         string uploadedBy,
+        bool publish,
         CancellationToken ct)
     {
         if (IsMocked)
-            return UpsertSeed(projectId, moduleId, version, originalFileName, storagePath, uploadedBy);
+            return UpsertSeed(projectId, moduleId, version, originalFileName, storagePath, uploadedBy, publish);
 
         var projectGuid = await ResolveProjectGuidAsync(projectId, ct);
         if (projectGuid is null)
             return null;
 
         await using var c = await _sql.OpenAsync(ct);
-        await ArchiveExistingAsync(c, projectGuid.Value, moduleId, ct);
-        var id = await InsertProjectAsync(c, projectGuid.Value, moduleId, version, originalFileName, storagePath, uploadedBy, ct);
+        await ArchiveExistingAsync(c, projectGuid.Value, moduleId, publish, ct);
+        var id = await InsertProjectAsync(c, projectGuid.Value, moduleId, version, originalFileName, storagePath, uploadedBy, publish, ct);
         return await GetFromStoreAsync(id.ToString(), ct);
     }
     /// <summary>Archives an active global CTD template by identifier.</summary>
@@ -359,13 +379,15 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         string version,
         string originalFileName,
         string storagePath,
-        string uploadedBy)
+        string uploadedBy,
+        bool publish)
     {
         var normalizedModuleId = moduleId.Trim().ToUpperInvariant();
         SeedList.RemoveAll(t =>
             string.Equals(t.ProjectId, projectId, StringComparison.OrdinalIgnoreCase)
             && SameModule(t, normalizedModuleId)
-            && t.Status != "Archived");
+            && t.Status != "Archived"
+            && (publish || !t.IsPublished));
 
         var item = Make(
             Guid.NewGuid().ToString("N"),
@@ -377,19 +399,21 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             uploadedBy,
             DateTime.UtcNow,
             "Active",
-            false);
+            false,
+            isPublished: publish);
         SeedList.Add(item);
         return item;
     }
 
-    private static async Task ArchiveExistingAsync(SqlConnection c, Guid projectId, string moduleId, CancellationToken ct)
+    private static async Task ArchiveExistingAsync(SqlConnection c, Guid projectId, string moduleId, bool publish, CancellationToken ct)
         => await c.ExecuteAsync(new CommandDefinition(
             """
             UPDATE [dbo].[CtdTemplate]
             SET [Status] = N'Archived'
-            WHERE [ProjectId] = @ProjectId AND [ModuleId] = @ModuleId AND [Status] <> N'Archived';
+            WHERE [ProjectId] = @ProjectId AND [ModuleId] = @ModuleId AND [Status] <> N'Archived'
+              AND (@Publish = 1 OR [IsPublished] = 0);
             """,
-            new { ProjectId = projectId, ModuleId = moduleId.Trim().ToUpperInvariant() },
+            new { ProjectId = projectId, ModuleId = moduleId.Trim().ToUpperInvariant(), Publish = publish },
             cancellationToken: ct));
 
     private static async Task<Guid> InsertProjectAsync(
@@ -400,13 +424,14 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         string originalFileName,
         string storagePath,
         string uploadedBy,
+        bool publish,
         CancellationToken ct)
     {
         return await c.ExecuteScalarAsync<Guid>(new CommandDefinition(
             """
-            INSERT INTO [dbo].[CtdTemplate] ([ProjectId], [Country], [ModuleId], [FileName], [StoragePath], [Version], [UploadedBy], [UploadedOn], [Status], [IsDefault])
+            INSERT INTO [dbo].[CtdTemplate] ([ProjectId], [Country], [ModuleId], [FileName], [StoragePath], [Version], [UploadedBy], [UploadedOn], [Status], [IsDefault], [IsPublished])
             OUTPUT INSERTED.[Id]
-            VALUES (@ProjectId, N'Global', @ModuleId, @FileName, @StoragePath, @Version, @UploadedBy, SYSUTCDATETIME(), N'Active', 0);
+            VALUES (@ProjectId, N'Global', @ModuleId, @FileName, @StoragePath, @Version, @UploadedBy, SYSUTCDATETIME(), N'Active', 0, @Publish);
             """,
             new
             {
@@ -416,6 +441,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
                 StoragePath = storagePath.Trim(),
                 Version = version.Trim(),
                 UploadedBy = uploadedBy.Trim(),
+                Publish = publish,
             },
             cancellationToken: ct));
     }

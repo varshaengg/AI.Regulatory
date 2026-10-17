@@ -94,6 +94,7 @@ export interface CtdTemplateModuleEntry {
   label: string;
   color: string;
   template: CtdTemplate | null;
+  pendingReview?: CtdTemplate | null;
 }
 
 // ─── Project sources — A4 ───────────────────────────────────────────────────

@@ -19,11 +19,13 @@ public sealed partial class TemplatesController : ControllerBase
 {
     private readonly TemplatesRepository _repo;
     private readonly IWebHostEnvironment _env;
+    private readonly IAuthorizationService _authz;
 
-    public TemplatesController(TemplatesRepository repo, IWebHostEnvironment env)
+    public TemplatesController(TemplatesRepository repo, IWebHostEnvironment env, IAuthorizationService authz)
     {
         _repo = repo;
         _env = env;
+        _authz = authz;
     }
 
     [HttpGet]
@@ -31,7 +33,7 @@ public sealed partial class TemplatesController : ControllerBase
     public async Task<ActionResult<Page<CtdTemplate>>> List(CancellationToken ct)
     {
         var items = (await _repo.ListAsync(ct))
-            .Where(t => string.Equals(t.Scope, "Global", StringComparison.OrdinalIgnoreCase))
+            .Where(t => string.Equals(t.Scope, "Global", StringComparison.OrdinalIgnoreCase) || !t.IsPublished)
             .ToArray();
         return Ok(new Page<CtdTemplate>(items, new PageInfo(items.Length, null, false)));
     }
@@ -147,7 +149,9 @@ public sealed partial class TemplatesController : ControllerBase
         if (validation is not null) return validation;
 
         var storagePath = await SaveTemplateAsync($"projects/{projectId}", moduleId, file, ct);
-        var saved = await _repo.UpsertProjectOverrideAsync(projectId, moduleId, version, Path.GetFileName(file.FileName), storagePath, CurrentUserName(), ct);
+        // Overrides from template admins are published at once; everyone else's wait in review.
+        var isAdmin = (await _authz.AuthorizeAsync(User, AuthPolicies.TemplatesAdmin)).Succeeded;
+        var saved = await _repo.UpsertProjectOverrideAsync(projectId, moduleId, version, Path.GetFileName(file.FileName), storagePath, CurrentUserName(), isAdmin, ct);
         if (saved is null)
         {
             return Problem(

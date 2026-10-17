@@ -103,7 +103,8 @@ public sealed record CtdTemplateModuleEntry(
     string ModuleId,
     string Label,
     string Color,
-    CtdTemplate? Template);
+    CtdTemplate? Template,
+    CtdTemplate? PendingReview = null);
 
 
 // ─── Project sources — A4, L5 ─────────────────────────────────────────────────

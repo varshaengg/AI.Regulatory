@@ -167,7 +167,7 @@ export default function A2Screen() {
                       Set as default
                     </Btn>
                   )}
-                  <Btn
+                  {row.scope === "Global" && <Btn
                     variant="subtle"
                     style={{ fontSize: 11, padding: "3px 8px", color: C.danger }}
                     disabled={busyId !== null}
@@ -176,7 +176,7 @@ export default function A2Screen() {
                     aria-label={`Delete ${row.fileName || row.moduleId || "template"}`}
                   >
                     <Trash2 size={11} />{busyId === row.id ? "Deleting…" : "Delete"}
-                  </Btn>
+                  </Btn>}
                 </td>
               </tr>
             ))}

@@ -26,6 +26,9 @@ export default function L4Screen() {
   const activeTemplate = templates.status === "ready" && active
     ? templates.data.find((entry) => entry.moduleId === active.id)?.template ?? null
     : null;
+  const pendingTemplate = templates.status === "ready" && active
+    ? templates.data.find((entry) => entry.moduleId === active.id)?.pendingReview ?? null
+    : null;
   const subs = useApi(
     (sig) => (active ? listSubModules(active.id, sig) : Promise.resolve([])),
     [active?.id],
@@ -42,8 +45,8 @@ export default function L4Screen() {
     setUploadingTemplate(true);
     setTemplateMessage(null);
     try {
-      await uploadProjectTemplateOverride(projectId, active.id, activeTemplate?.version ?? "1.0", file);
-      setTemplateMessage(`${active.id} template override uploaded.`);
+      const saved = await uploadProjectTemplateOverride(projectId, active.id, activeTemplate?.version ?? "1.0", file);
+      setTemplateMessage(`${active.id} template override ${saved.isPublished ? "published" : "uploaded and sent for review"}.`);
       setRefreshTemplates((v) => v + 1);
     } catch (err) {
       setTemplateMessage(err instanceof Error ? err.message : String(err));
@@ -105,6 +108,7 @@ export default function L4Screen() {
                         : "Ask an admin to upload the global PDF default or upload a project override."}
                   </span>
                 </div>
+                {pendingTemplate && <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>In review: {pendingTemplate.fileName}. An admin must publish it before it is used.</div>}
                 {templateMessage && <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>{templateMessage}</div>}
               </div>
               <label>
