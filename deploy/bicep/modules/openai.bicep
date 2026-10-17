@@ -12,6 +12,9 @@ param gpt4oMiniCapacity int = 30
 @description('Deployment capacity for text-embedding-3-large in kTPM')
 param embeddingCapacity int = 60
 
+@description('Deployment SKU. GlobalStandard is available in regions without regional Standard capacity.')
+param deploymentSkuName string = 'GlobalStandard'
+
 var accountName = toLower(openAiName)
 
 resource account 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
@@ -36,7 +39,7 @@ resource account 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
 resource depMini 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: account
   name: 'gpt-4o-mini'
-  sku: { name: 'Standard', capacity: gpt4oMiniCapacity }
+  sku: { name: deploymentSkuName, capacity: gpt4oMiniCapacity }
   properties: {
     model: { format: 'OpenAI', name: 'gpt-4o-mini', version: '2024-07-18' }
     versionUpgradeOption: 'OnceCurrentVersionExpired'
@@ -46,7 +49,7 @@ resource depMini 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' =
 resource depEmbed 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: account
   name: 'text-embedding-3-large'
-  sku: { name: 'Standard', capacity: embeddingCapacity }
+  sku: { name: deploymentSkuName, capacity: embeddingCapacity }
   properties: {
     model: { format: 'OpenAI', name: 'text-embedding-3-large', version: '1' }
     versionUpgradeOption: 'OnceCurrentVersionExpired'

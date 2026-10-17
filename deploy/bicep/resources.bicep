@@ -20,6 +20,12 @@ param sqlAadAdminPrincipalType string = 'Group'
 @description('Optional override — deploy SQL in a different region (e.g. dev SKU not available in the app region).')
 param sqlLocation string = ''
 
+@description('Region for Azure OpenAI (empty = main location).')
+param openAiLocation string = ''
+
+@description('Region for Document Intelligence (empty = main location).')
+param docIntelLocation string = ''
+
 @description('Map of feature -> array of extra appSettings entries ({name,value}). Fed by the pipeline from deploy/config/appsettings.<feature>.<env>.json.')
 param extraAppSettingsMap object = {}
 
@@ -205,7 +211,7 @@ module openai 'modules/openai.bicep' = if (wantOpenAi) {
   name: 'mod-openai'
   params: {
     openAiName:               oaiName
-    location:                 location
+    location:                 empty(openAiLocation) ? location : openAiLocation
     tags:                     tags
     workloadIdentityPrincipalId: workloadIdentity.?outputs.principalId ?? ''
     logAnalyticsWorkspaceId:  monitoring.?outputs.logAnalyticsWorkspaceId ?? ''
@@ -230,7 +236,7 @@ module docIntel 'modules/documentintelligence.bicep' = if (wantDocIntel) {
   name: 'mod-documentintelligence'
   params: {
     documentIntelligenceName:    diName
-    location:                    location
+    location:                    empty(docIntelLocation) ? location : docIntelLocation
     tags:                        tags
     workloadIdentityPrincipalId: workloadIdentity.?outputs.principalId ?? ''
     logAnalyticsWorkspaceId:     monitoring.?outputs.logAnalyticsWorkspaceId ?? ''

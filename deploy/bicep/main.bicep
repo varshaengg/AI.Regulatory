@@ -82,6 +82,12 @@ param sqlAadAdminPrincipalType string = 'Group'
 @description('Override region for SQL server (empty = use main location). Set when target SKU unavailable in main region.')
 param sqlLocation string = ''
 
+@description('Region for Azure OpenAI (empty = main location).')
+param openAiLocation string = ''
+
+@description('Region for Document Intelligence (empty = main location).')
+param docIntelLocation string = ''
+
 @description('Map of feature -> array of extra appSettings entries. Pipeline builds this from deploy/config/appsettings.<feature>.<env>.json.')
 param extraAppSettingsMap object = {}
 
@@ -178,6 +184,8 @@ module workload 'resources.bicep' = {
     sqlAadAdminGroupName:       sqlAadAdminGroupName
     sqlAadAdminPrincipalType:   sqlAadAdminPrincipalType
     sqlLocation:                sqlLocation
+    openAiLocation:             openAiLocation
+    docIntelLocation:           docIntelLocation
     extraAppSettingsMap:        extraAppSettingsMap
   }
 }
