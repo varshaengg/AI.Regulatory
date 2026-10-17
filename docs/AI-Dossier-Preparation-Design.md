@@ -173,6 +173,18 @@ The uploaded PDF is guidance input, not the runtime data model.
 AI parse output must never become active merely because model output is
 syntactically valid.
 
+## 7A. Module Guidelines (validation rules)
+
+Intent: each CTD module (M1-M5) has an admin-managed guideline document that the AI uses to validate discovered document content for accuracy. Findings are **advisory**: they are flagged on the document and gap tree, and never block compilation.
+
+- **Scope:** per module, global default, with optional per-country override. Resolution: country guideline, then Global; published only.
+- **Authoring:** admin uploads PDF/DOCX. Document Intelligence extracts the text and Azure OpenAI proposes checklist rules (id, text, severity, applicable node or document type). An admin reviews and edits the rules before publishing.
+- **Lifecycle:** same as templates: versioned, publish/unpublish, a snapshot is taken at run creation so reruns are reproducible.
+- **Use in the pipeline:** new stage **Validate** after Classify/Map. For each mapped document the model checks extracted content against the rules for that module and node. It returns `{ruleId, verdict: pass|flag|unclear, evidence snippet, page}`.
+- **Data model (new):** `ModuleGuideline` (Module, Country, Version, IsPublished, SourceBlobPath), `GuidelineRule` (GuidelineId, RuleKey, Text, Severity, NodeRef), `DossierDocumentFinding` (RunId, DocumentId, RuleId, Verdict, Evidence, Page). `DossierRun` stores the guideline version ids.
+- **API (new):** `/guidelines` CRUD, `PUT /guidelines/{id}/publish|unpublish`, `GET /dossier-runs/{id}/findings`.
+- **UI:** admin guideline catalog, modelled on A2; findings badge on documents and tree nodes.
+- **Governance:** advisory only; a human reviewer accepts or dismisses each finding, and the decision is audit-logged.
 ## 8. Dossier Preparation Flow
 
 ### 8.1 Run creation
