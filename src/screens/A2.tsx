@@ -4,7 +4,7 @@ import { Search, Trash2, Upload } from "lucide-react";
 import { useNavigate } from "react-router";
 import { C } from "../design/tokens";
 import { Btn, Chip, Card, FSelect, Breadcrumb, ScreenCaption } from "../design/primitives";
-import { deleteGlobalTemplate, listTemplates, setDefaultTemplate } from "../api/resources";
+import { deleteGlobalTemplate, listTemplates, publishTemplate, setDefaultTemplate } from "../api/resources";
 import { useApi, ErrorBanner } from "../api/useApi";
 import type { CtdTemplate } from "../api/types";
 
@@ -29,6 +29,19 @@ export default function A2Screen() {
       setRefreshKey(k => k + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to set default template.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const publishRow = async (row: CtdTemplate) => {
+    setBusyId(row.id);
+    setActionError(null);
+    try {
+      await publishTemplate(row.id);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to publish template.");
     } finally {
       setBusyId(null);
     }
@@ -129,9 +142,20 @@ export default function A2Screen() {
                 <td style={td}>{row.isDefault ? <Chip color="success">Default</Chip> : <span style={{ color: C.text3 }}>—</span>}</td>
                 <td style={{ ...td, color: C.text2 }}>{row.uploadedBy}</td>
                 <td style={{ ...td, color: C.text3 }}>{new Date(row.uploadedOn).toISOString().slice(0, 10)}</td>
-                <td style={td}><Chip color={statusColor[row.status]}>{row.status}</Chip></td>
+                <td style={td}>{row.isPublished === false ? <Chip color="warning">In review</Chip> : <Chip color={statusColor[row.status]}>{row.status}</Chip>}</td>
                 <td style={td}>
-                  {!row.isDefault && (
+                  {row.isPublished === false && (
+                    <Btn
+                      variant="subtle"
+                      style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}
+                      disabled={busyId !== null}
+                      onClick={() => publishRow(row)}
+                      data-id={`publish-template-${row.id}`}
+                    >
+                      Publish
+                    </Btn>
+                  )}
+                  {!row.isDefault && row.isPublished !== false && (
                     <Btn
                       variant="subtle"
                       style={{ fontSize: 11, padding: "3px 8px", marginRight: 4 }}

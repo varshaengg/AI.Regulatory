@@ -47,7 +47,8 @@ public sealed partial class TemplatesController : ControllerBase
         IFormFile file,
         CancellationToken ct,
         [FromForm] string? country = null,
-        [FromForm] bool makeDefault = false)
+        [FromForm] bool makeDefault = false,
+        [FromForm] bool publish = true)
     {
         var validation = await ValidateUploadAsync(moduleId, version, file, ct);
         if (validation is not null) return validation;
@@ -63,7 +64,7 @@ public sealed partial class TemplatesController : ControllerBase
         }
 
         var storagePath = await SaveTemplateAsync($"global/{normalizedCountry}", moduleId, file, ct);
-        var saved = await _repo.UpsertGlobalAsync(moduleId, normalizedCountry, version, Path.GetFileName(file.FileName), storagePath, CurrentUserName(), makeDefault, ct);
+        var saved = await _repo.UpsertGlobalAsync(moduleId, normalizedCountry, version, Path.GetFileName(file.FileName), storagePath, CurrentUserName(), makeDefault, publish, ct);
         return Ok(saved);
     }
 
@@ -75,6 +76,24 @@ public sealed partial class TemplatesController : ControllerBase
     public async Task<ActionResult<CtdTemplate>> SetDefault(string id, CancellationToken ct)
     {
         var saved = await _repo.SetDefaultAsync(id, ct);
+        if (saved is not null)
+            return Ok(saved);
+
+        return Problem(
+            type: ErrorTypes.NotFound,
+            title: "Template not found",
+            statusCode: StatusCodes.Status404NotFound,
+            detail: $"No published global CTD template '{id}' exists. Publish it before setting it as default.");
+    }
+
+    /// <summary>Publishes an in-review global template so it can be used for dossiers.</summary>
+    [HttpPut("{id}/publish")]
+    [Authorize(Policy = AuthPolicies.TemplatesAdmin)]
+    [ProducesResponseType(typeof(CtdTemplate), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CtdTemplate>> Publish(string id, CancellationToken ct)
+    {
+        var saved = await _repo.PublishAsync(id, ct);
         if (saved is not null)
             return Ok(saved);
 

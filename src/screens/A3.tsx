@@ -30,6 +30,7 @@ export default function A3Screen() {
   const [moduleId, setModuleId] = React.useState("M3");
   const [country, setCountry] = React.useState("Global");
   const [makeDefault, setMakeDefault] = React.useState(false);
+  const [publish, setPublish] = React.useState(true);
   const [version, setVersion] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [status, setStatus] = React.useState<{ kind: "info" | "success" | "error"; text: string } | null>(null);
@@ -44,7 +45,7 @@ export default function A3Screen() {
     setUploading(true);
     setStatus(null);
     try {
-      const saved = await uploadGlobalTemplate(moduleId, version.trim(), file, { country, makeDefault });
+      const saved = await uploadGlobalTemplate(moduleId, version.trim(), file, { country, makeDefault: makeDefault && publish, publish });
       const scope = `${saved.moduleId} / ${saved.country}`;
       setStatus({
         kind: "success",
@@ -117,11 +118,22 @@ export default function A3Screen() {
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.text2 }}>
             <input
               type="checkbox"
-              checked={makeDefault}
+              checked={makeDefault && publish}
+              disabled={!publish}
               onChange={(e) => setMakeDefault(e.target.checked)}
               data-id="template-make-default"
             />
             Set as the default for this country and module
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.text2 }}>
+            <input
+              type="checkbox"
+              checked={publish}
+              onChange={(e) => setPublish(e.target.checked)}
+              data-id="template-publish"
+            />
+            Publish immediately (unchecked saves the template as In review)
           </label>
 
           <div style={{ borderRadius: 6, border: `2px dashed ${validPdf ? C.border2 : C.danger}`, padding: "24px 16px", textAlign: "center" }}>

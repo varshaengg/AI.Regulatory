@@ -52,6 +52,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         string storagePath,
         string uploadedBy,
         bool makeDefault,
+        bool publish,
         CancellationToken ct)
     {
         country = NormalizeCountry(country);
@@ -60,10 +61,10 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         if (IsMocked)
         {
             var hasDefault = SeedList.Any(t => IsGlobalDefault(t, country, moduleId));
-            var asDefault = makeDefault || !hasDefault;
+            var asDefault = publish && (makeDefault || !hasDefault);
             if (asDefault)
                 SeedList.RemoveAll(t => IsGlobalDefault(t, country, moduleId));
-            var item = Make(Guid.NewGuid().ToString("N"), null, moduleId, version.Trim(), originalFileName, storagePath, uploadedBy, DateTime.UtcNow, "Active", asDefault, country);
+            var item = Make(Guid.NewGuid().ToString("N"), null, moduleId, version.Trim(), originalFileName, storagePath, uploadedBy, DateTime.UtcNow, "Active", asDefault, country, publish);
             SeedList.Add(item);
             return item;
         }
@@ -76,15 +77,15 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             WHERE [ProjectId] IS NULL AND [Country] = @country AND [ModuleId] = @moduleId AND [IsDefault] = 1 AND [Status] <> N'Archived';
             """,
             new { country, moduleId }, tx, cancellationToken: ct));
-        var isDefault = makeDefault || existingDefault == 0;
+        var isDefault = publish && (makeDefault || existingDefault == 0);
         if (isDefault)
             await ClearGlobalDefaultAsync(c, tx, country, moduleId, ct);
 
         var id = await c.ExecuteScalarAsync<Guid>(new CommandDefinition(
             """
-            INSERT INTO [dbo].[CtdTemplate] ([ProjectId], [Country], [ModuleId], [FileName], [StoragePath], [Version], [UploadedBy], [UploadedOn], [Status], [IsDefault])
+            INSERT INTO [dbo].[CtdTemplate] ([ProjectId], [Country], [ModuleId], [FileName], [StoragePath], [Version], [UploadedBy], [UploadedOn], [Status], [IsDefault], [IsPublished])
             OUTPUT INSERTED.[Id]
-            VALUES (NULL, @country, @moduleId, @fileName, @storagePath, @version, @uploadedBy, SYSUTCDATETIME(), N'Active', @isDefault);
+            VALUES (NULL, @country, @moduleId, @fileName, @storagePath, @version, @uploadedBy, SYSUTCDATETIME(), N'Active', @isDefault, @publish);
             """,
             new
             {
@@ -94,7 +95,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
                 storagePath = storagePath.Trim(),
                 version = version.Trim(),
                 uploadedBy = uploadedBy.Trim(),
-                isDefault,
+                isDefault,publish,
             },
             tx,
             cancellationToken: ct));
@@ -108,7 +109,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
     {
         if (IsMocked)
         {
-            var target = SeedList.FirstOrDefault(t => MatchesId(t, id) && t.Scope == "Global" && t.Status != "Archived");
+            var target = SeedList.FirstOrDefault(t => MatchesId(t, id) && t.Scope == "Global" && t.Status != "Archived" && t.IsPublished);
             if (target is null) return null;
             for (var i = 0; i < SeedList.Count; i++)
             {
@@ -125,7 +126,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         await using var c = await _sql.OpenAsync(ct);
         await using var tx = (SqlTransaction)await c.BeginTransactionAsync(ct);
         var target2 = await c.QuerySingleOrDefaultAsync<(string Country, string ModuleId)?>(new CommandDefinition(
-            "SELECT [Country], [ModuleId] FROM [dbo].[CtdTemplate] WHERE [Id] = @templateId AND [ProjectId] IS NULL AND [Status] <> N'Archived';",
+            "SELECT [Country], [ModuleId] FROM [dbo].[CtdTemplate] WHERE [Id] = @templateId AND [ProjectId] IS NULL AND [IsPublished] = 1 AND [Status] <> N'Archived';",
             new { templateId }, tx, cancellationToken: ct));
         if (target2 is null)
             return null;
@@ -136,6 +137,37 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             new { templateId }, tx, cancellationToken: ct));
         await tx.CommitAsync(ct);
         return await GetFromStoreAsync(id, ct);
+    }
+
+    /// <summary>Publishes an in-review global template; it becomes the default when its country and module has none.</summary>
+    public async Task<CtdTemplate?> PublishAsync(string id, CancellationToken ct)
+    {
+        if (IsMocked)
+        {
+            var index = SeedList.FindIndex(t => MatchesId(t, id) && t.Scope == "Global" && t.Status != "Archived");
+            if (index < 0) return null;
+            var current = SeedList[index];
+            var hasDefault = SeedList.Any(t => IsGlobalDefault(t, current.Country, current.ModuleId));
+            SeedList[index] = current with { IsPublished = true, IsDefault = current.IsDefault || !hasDefault };
+            return SeedList[index];
+        }
+
+        if (!Guid.TryParse(id, out var templateId))
+            return null;
+
+        await using var c = await _sql.OpenAsync(ct);
+        var rows = await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE t SET [IsPublished] = 1,
+                   [IsDefault] = CASE WHEN t.[IsDefault] = 1 OR NOT EXISTS (
+                       SELECT 1 FROM [dbo].[CtdTemplate] d
+                       WHERE d.[ProjectId] IS NULL AND d.[Country] = t.[Country] AND d.[ModuleId] = t.[ModuleId]
+                         AND d.[IsDefault] = 1 AND d.[Status] <> N'Archived') THEN 1 ELSE 0 END
+            FROM [dbo].[CtdTemplate] t
+            WHERE t.[Id] = @templateId AND t.[ProjectId] IS NULL AND t.[Status] <> N'Archived';
+            """,
+            new { templateId }, cancellationToken: ct));
+        return rows == 0 ? null : await GetFromStoreAsync(id, ct);
     }
 
     public async Task<CtdTemplate?> UpsertProjectOverrideAsync(
@@ -172,7 +204,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             SeedList.Remove(removed);
             if (removed.IsDefault)
             {
-                var next = SeedList.FindIndex(t => t.Scope == "Global" && t.Country == removed.Country && t.ModuleId == removed.ModuleId);
+                var next = SeedList.FindIndex(t => t.Scope == "Global" && t.IsPublished && t.Country == removed.Country && t.ModuleId == removed.ModuleId);
                 if (next >= 0) SeedList[next] = SeedList[next] with { IsDefault = true };
             }
 
@@ -202,7 +234,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
                 """
                 UPDATE [dbo].[CtdTemplate] SET [IsDefault] = 1
                 WHERE [Id] = (SELECT TOP 1 [Id] FROM [dbo].[CtdTemplate]
-                              WHERE [ProjectId] IS NULL AND [Country] = @Country AND [ModuleId] = @ModuleId AND [Status] <> N'Archived'
+                              WHERE [ProjectId] IS NULL AND [Country] = @Country AND [ModuleId] = @ModuleId AND [IsPublished] = 1 AND [Status] <> N'Archived'
                               ORDER BY [UploadedOn] DESC);
                 """,
                 new { archived.Value.Country, archived.Value.ModuleId }, tx, cancellationToken: ct));
@@ -286,7 +318,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         await using var c = await _sql.OpenAsync(ct);
         var rows = await c.QueryAsync<CtdTemplateRow>(new CommandDefinition(
             """
-            SELECT t.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId], t.[Country], t.[IsDefault],
+            SELECT t.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId], t.[Country], t.[IsDefault], t.[IsPublished],
                    t.[ModuleId], t.[FileName], t.[StoragePath], t.[Version],
                    t.[UploadedBy], t.[UploadedOn], t.[Status]
             FROM [dbo].[CtdTemplate] t
@@ -306,7 +338,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         await using var c = await _sql.OpenAsync(ct);
         var row = await c.QuerySingleOrDefaultAsync<CtdTemplateRow>(new CommandDefinition(
             """
-            SELECT t.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId], t.[Country], t.[IsDefault],
+            SELECT t.[Id], CONVERT(VARCHAR(20), p.[ProjectNumber]) AS [ProjectId], t.[Country], t.[IsDefault], t.[IsPublished],
                    t.[ModuleId], t.[FileName], t.[StoragePath], t.[Version],
                    t.[UploadedBy], t.[UploadedOn], t.[Status]
             FROM [dbo].[CtdTemplate] t
@@ -410,7 +442,8 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             row.UploadedOn,
             row.Status,
             row.ProjectId is null && row.IsDefault,
-            row.Country);
+            row.Country,
+            row.IsPublished);
 
     private static CtdTemplate Make(
         string id,
@@ -423,7 +456,8 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         DateTime uploadedOn,
         string status,
         bool isDefault,
-        string country = GlobalCountry)
+        string country = GlobalCountry,
+        bool isPublished = true)
         => new(
             Id: id,
             Country: projectId is null ? country : $"Project {projectId}",
@@ -438,7 +472,8 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
             Format: "pdf",
             Scope: projectId is null ? "Global" : "Project",
             ProjectId: projectId,
-            IsDefault: isDefault);
+            IsDefault: isDefault,
+            IsPublished: isPublished);
 
     private sealed class CtdTemplateRow
     {
@@ -446,6 +481,7 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         public string? ProjectId { get; init; }
         public string Country { get; init; } = GlobalCountry;
         public bool IsDefault { get; init; }
+        public bool IsPublished { get; init; } = true;
         public string ModuleId { get; init; } = string.Empty;
         public string FileName { get; init; } = string.Empty;
         public string StoragePath { get; init; } = string.Empty;

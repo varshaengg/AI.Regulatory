@@ -86,6 +86,7 @@ export interface CtdTemplate {
   scope: "Global" | "Project" | string;
   projectId: string | null;
   isDefault: boolean;
+  isPublished: boolean;
 }
 
 export interface CtdTemplateModuleEntry {

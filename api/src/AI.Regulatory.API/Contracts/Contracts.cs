@@ -96,7 +96,8 @@ public sealed record CtdTemplate(
     string Format = "pdf",
     string Scope = "Global",
     string? ProjectId = null,
-    bool IsDefault = true);
+    bool IsDefault = true,
+    bool IsPublished = true);
 
 public sealed record CtdTemplateModuleEntry(
     string ModuleId,

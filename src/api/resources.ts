@@ -40,17 +40,20 @@ export const listTemplates = (signal?: AbortSignal) =>
   api.get<Page<CtdTemplate>>("/templates", undefined, signal);
 export const uploadGlobalTemplate = (
   moduleId: string, version: string, file: File,
-  options: { country?: string; makeDefault?: boolean } = {}, signal?: AbortSignal,
+  options: { country?: string; makeDefault?: boolean; publish?: boolean } = {}, signal?: AbortSignal,
 ) => {
   const body = new FormData();
   body.set("version", version);
   body.set("country", options.country ?? "Global");
   body.set("makeDefault", String(options.makeDefault ?? false));
+  body.set("publish", String(options.publish ?? true));
   body.set("file", file);
   return api.postForm<CtdTemplate>(`/templates/global/${encodeURIComponent(moduleId)}`, body, signal);
 };
 export const setDefaultTemplate = (id: string, signal?: AbortSignal) =>
   api.put<CtdTemplate>(`/templates/${encodeURIComponent(id)}/default`, undefined, signal);
+export const publishTemplate = (id: string, signal?: AbortSignal) =>
+  api.put<CtdTemplate>(`/templates/${encodeURIComponent(id)}/publish`, undefined, signal);
 export const deleteGlobalTemplate = (id: string, signal?: AbortSignal) =>
   api.del<void>(`/templates/${encodeURIComponent(id)}`, signal);
 export const getProjectTemplates = (projectId: string, signal?: AbortSignal) =>
