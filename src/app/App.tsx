@@ -23,6 +23,7 @@ const screenLoaders: Record<string, React.LazyExoticComponent<React.ComponentTyp
   A5: lazy(() => import("../screens/A5")),
   A6: lazy(() => import("../screens/A6")),
   A7: lazy(() => import("../screens/A7")),
+  A8: lazy(() => import("../screens/A8")),
   L1: lazy(() => import("../screens/L1")),
   L2: lazy(() => import("../screens/L2")),
   L3: lazy(() => import("../screens/L3")),

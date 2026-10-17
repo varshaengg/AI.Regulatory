@@ -372,3 +372,10 @@ export interface MePermissions {
   personas: string[];
   grants: PermissionGrant[];
 }
+
+export interface GuidelineRule { ruleKey: string; text: string; severity: string; nodeRef?: string | null }
+export interface ModuleGuideline {
+  id: string; moduleId: string; country: string; version: string; fileName: string;
+  uploadedBy: string; uploadedOn: string; isPublished: boolean; extractionNote?: string | null;
+  rules: GuidelineRule[];
+}

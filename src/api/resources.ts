@@ -5,7 +5,7 @@ import { api } from "./client";
 import type {
   Page,
   ProjectSummary, ProjectDetail, CreateProjectRequest, UpdateProjectRequest,
-  CtdTemplate, CtdTemplateModuleEntry,
+  CtdTemplate, CtdTemplateModuleEntry, ModuleGuideline, GuidelineRule,
   ProjectSourcesByModule, ProjectSource,
   CreateProjectSourceRequest, UpdateProjectSourceRequest,
   TestSourceConnectionRequest, ConnectionTestResult,
@@ -161,3 +161,22 @@ export const resolveAadPersonByEmail = (email: string, signal?: AbortSignal) =>
 // Effective permissions for the caller (feeds usePermissions hook)
 export const getMyPermissions = (signal?: AbortSignal) =>
   api.get<MePermissions>("/me/permissions", undefined, signal);
+
+// Guidelines
+export const listGuidelines = (signal?: AbortSignal) =>
+  api.get<Page<ModuleGuideline>>("/guidelines", undefined, signal);
+export const uploadGuideline = (moduleId: string, version: string, country: string, file: File, signal?: AbortSignal) => {
+  const body = new FormData();
+  body.set("version", version);
+  body.set("country", country);
+  body.set("file", file);
+  return api.postForm<ModuleGuideline>(`/guidelines/${encodeURIComponent(moduleId)}`, body, signal);
+};
+export const saveGuidelineRules = (id: string, rules: GuidelineRule[], signal?: AbortSignal) =>
+  api.put<ModuleGuideline>(`/guidelines/${encodeURIComponent(id)}/rules`, { rules }, signal);
+export const publishGuideline = (id: string, signal?: AbortSignal) =>
+  api.put<ModuleGuideline>(`/guidelines/${encodeURIComponent(id)}/publish`, undefined, signal);
+export const unpublishGuideline = (id: string, signal?: AbortSignal) =>
+  api.put<ModuleGuideline>(`/guidelines/${encodeURIComponent(id)}/unpublish`, undefined, signal);
+export const deleteGuideline = (id: string, signal?: AbortSignal) =>
+  api.del<void>(`/guidelines/${encodeURIComponent(id)}`, signal);
