@@ -45,6 +45,7 @@ builder.Services.AddSingleton<CommentsRepository>();
 builder.Services.AddSingleton<RunsRepository>();
 builder.Services.AddSingleton<PreparationRunsRepository>();
 builder.Services.AddSingleton<GuidelinesRepository>();
+builder.Services.AddSingleton<TemplateStructureRepository>();
 builder.Services.AddGuidelineAi(builder.Configuration);
 builder.Services.AddSingleton<ISourceDocumentLister, BlobSourceDocumentLister>();
 builder.Services.AddSingleton<PreparationRunService>();

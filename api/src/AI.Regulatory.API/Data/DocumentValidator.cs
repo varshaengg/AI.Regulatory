@@ -99,11 +99,13 @@ public static class GuidelineAiServiceCollectionExtensions
         {
             services.AddHttpClient<AzureAiClient>(c => c.Timeout = TimeSpan.FromMinutes(3));
             services.AddSingleton<IGuidelineRuleExtractor, AzureAiGuidelineRuleExtractor>();
+            services.AddSingleton<ITemplateStructureParser, AzureAiTemplateStructureParser>();
             services.AddSingleton<IDocumentValidator, AzureAiDocumentValidator>();
         }
         else
         {
             services.AddSingleton<IGuidelineRuleExtractor, ManualGuidelineRuleExtractor>();
+            services.AddSingleton<ITemplateStructureParser, ManualTemplateStructureParser>();
             services.AddSingleton<IDocumentValidator, NoopDocumentValidator>();
         }
         return services;

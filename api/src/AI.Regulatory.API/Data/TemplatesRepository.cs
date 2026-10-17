@@ -391,6 +391,18 @@ public sealed class TemplatesRepository : BaseRepository<CtdTemplate>
         return row is null ? null : ToTemplate(row);
     }
 
+    /// <summary>Relative storage path of the template PDF; null in mocked mode or when the template is unknown.</summary>
+    public async Task<string?> GetStoragePathAsync(string id, CancellationToken ct)
+    {
+        if (IsMocked || !Guid.TryParse(id, out var templateId))
+            return null;
+
+        await using var c = await _sql.OpenAsync(ct);
+        return await c.QuerySingleOrDefaultAsync<string>(new CommandDefinition(
+            "SELECT [StoragePath] FROM [dbo].[CtdTemplate] WHERE [Id] = @templateId AND [Status] <> N'Archived';",
+            new { templateId }, cancellationToken: ct));
+    }
+
     private static bool SameModule(CtdTemplate template, string moduleId)
         => string.Equals(template.ModuleId, moduleId, StringComparison.OrdinalIgnoreCase);
 
