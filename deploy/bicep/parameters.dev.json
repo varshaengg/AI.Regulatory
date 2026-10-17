@@ -19,6 +19,7 @@
         { "kind": "appServicePlan" },
         { "kind": "appService", "feature": "web" },
         { "kind": "appService", "feature": "api" },
+        { "kind": "appService", "feature": "worker" },
         { "kind": "sqlServer" }
       ]
     },

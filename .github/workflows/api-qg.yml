@@ -39,6 +39,11 @@ jobs:
           dotnet build api/src/AI.Regulatory.API/AI.Regulatory.API.csproj \
             -c Release --no-restore -warnaserror
 
+      - name: dotnet build Worker (Release, warnings as errors)
+        run: |
+          dotnet build api/src/AI.Regulatory.Worker/AI.Regulatory.Worker.csproj \
+            -c Release -warnaserror
+
       - name: Check for vulnerable / deprecated NuGet packages
         run: |
           set -e
