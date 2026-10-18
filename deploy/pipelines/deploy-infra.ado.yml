@@ -55,7 +55,7 @@ stages:
               # code-owned settings (feature flags etc.) through the Bicep replace.
               $rg = ''; $apiApp = ''; $webApp = ''
               $latest = az deployment sub list `
-                --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" `
+                --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
                 -o tsv 2>$null
               if ($latest) {
                 Write-Host "Found prior infra deployment: $latest"
@@ -120,7 +120,7 @@ stages:
                   inlineScript: |
                     $rg = ''; $apiApp = ''; $webApp = ''
                     $latest = az deployment sub list `
-                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-')], &properties.timestamp)[-1].name" `
+                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
                       -o tsv 2>$null
                     if ($latest) {
                       $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv

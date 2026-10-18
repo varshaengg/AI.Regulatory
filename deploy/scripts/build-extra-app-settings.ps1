@@ -61,29 +61,29 @@ Get-ChildItem $cfgDir -Filter "appsettings.*.infra.$TargetEnv.json" -ErrorAction
     if ($ResourceGroup -and $nameMap.ContainsKey($feature)) {
         $appName = $nameMap[$feature]
         Write-Host "[$feature] querying live settings on $appName ..."
-        try {
-            $live = az webapp config appsettings list -g $ResourceGroup -n $appName -o json 2>$null | ConvertFrom-Json
-            if ($live) {
-                foreach ($k in @($codeOwned.Keys)) {
-                    $hit = $live | Where-Object name -eq $k | Select-Object -First 1
-                    if ($hit) {
-                        Write-Host "  preserving live value of $k"
-                        $codeOwned[$k] = $hit.value
-                    } else {
-                        Write-Host "  using seed value for $k"
-                    }
-                }
+        $liveJson = az webapp config appsettings list -g $ResourceGroup -n $appName -o json
+        if ($LASTEXITCODE -ne 0) {
+            throw "Cannot read settings for '$appName'; refusing to replace live code-owned values with seeds."
+        }
+        $live = $liveJson | ConvertFrom-Json
+        foreach ($k in @($codeOwned.Keys)) {
+            $hit = $live | Where-Object name -eq $k | Select-Object -First 1
+            if ($hit) {
+                Write-Host "  preserving live value of $k"
+                $codeOwned[$k] = $hit.value
+            } else {
+                Write-Host "  using seed value for $k"
             }
-        } catch {
-            Write-Host "  (app not found yet — using seed values)"
         }
     }
 
-    # Compose final list = infra settings + code-owned entries.
-    $final = @()
-    $final += $infraSettings
-    foreach ($k in $codeOwned.Keys) { $final += @{ name = $k; value = $codeOwned[$k] } }
-    $map[$feature] = $final
+    # Code-owned values take precedence without duplicate App Service keys.
+    $settingsByName = [ordered]@{}
+    foreach ($setting in $infraSettings) { $settingsByName[$setting.name] = $setting.value }
+    foreach ($k in $codeOwned.Keys) { $settingsByName[$k] = $codeOwned[$k] }
+    $map[$feature] = @($settingsByName.GetEnumerator() | ForEach-Object {
+        @{ name = $_.Key; value = $_.Value }
+    })
 }
 
 $json = $map | ConvertTo-Json -Depth 10 -Compress

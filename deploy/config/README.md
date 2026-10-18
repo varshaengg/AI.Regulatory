@@ -27,6 +27,18 @@ values of code-owned keys and passes them into `extraAppSettingsMap` too, so
 Bicep's collection-replace never wipes them. Cold start uses the seed values
 from the code file.
 
+The merge emits one entry per setting name. If a key appears in both scope
+files, the preserved code-owned value wins. A live-settings read failure stops
+the pipeline rather than silently replacing values with seeds. Infra discovery
+uses the latest deployment with resource-group and name-prefix outputs, skipping
+failed deployments whose outputs are empty.
+
+Run the focused merge checks with:
+
+```powershell
+.\deploy\scripts\build-extra-app-settings.tests.ps1
+```
+
 ## Adding a new App Service (e.g. `sharedapi`)
 
 1. Add to `deploy/bicep/parameters.<env>.json`:
@@ -54,8 +66,8 @@ No pipeline or Bicep-module changes required.
 
 ## Anti-patterns
 
-- **Don't put the same key in both `.infra.` and `.code.` files** — the infra
-  scope always wins (Bicep replaces the collection). Pick one owner per key.
+- **Don't put the same key in both `.infra.` and `.code.` files** — pick one
+  owner per key. Legacy overlaps are merged with code-owned precedence.
 - **Don't put the same key in a Bicep module *and* an `.infra.` file** — Azure
   rejects the deploy with a misleading *"Invalid values supplied for Azure
   Files related app settings"* error (this is Azure's cryptic message for

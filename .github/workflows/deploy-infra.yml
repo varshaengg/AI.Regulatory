@@ -32,6 +32,9 @@ jobs:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check app settings merge
+        shell: pwsh
+        run: ./deploy/scripts/build-extra-app-settings.tests.ps1
       - uses: azure/login@v2
         with:
           client-id:       ${{ secrets.AZURE_CLIENT_ID }}
@@ -43,7 +46,7 @@ jobs:
         run: |
           $rg = ''; $apiApp = ''; $webApp = ''
           $latest = az deployment sub list `
-            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
             -o tsv 2>$null
           if ($latest) {
             $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
@@ -67,7 +70,7 @@ jobs:
         run: |
           $loc = ''
           $latest = az deployment sub list `
-            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
             -o tsv 2>$null
           if ($latest) {
             $rg = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
@@ -114,7 +117,7 @@ jobs:
         run: |
           $rg = ''; $apiApp = ''; $webApp = ''
           $latest = az deployment sub list `
-            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
             -o tsv 2>$null
           if ($latest) {
             $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
@@ -138,7 +141,7 @@ jobs:
         run: |
           $loc = ''
           $latest = az deployment sub list `
-            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-')], &properties.timestamp)[-1].name" `
+            --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
             -o tsv 2>$null
           if ($latest) {
             $rg = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
