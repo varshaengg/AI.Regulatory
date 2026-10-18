@@ -1,4 +1,4 @@
-// Azure OpenAI — gpt-4o-mini + text-embedding-3-large deployments
+// Azure OpenAI — gpt-4.1-mini + text-embedding-3-large deployments
 param openAiName string
 param location string
 param tags object
@@ -6,8 +6,8 @@ param logAnalyticsWorkspaceId string = ''
 param enableDiagnostics bool = false
 param workloadIdentityPrincipalId string = ''
 
-@description('Deployment capacity for gpt-4o-mini in kTPM')
-param gpt4oMiniCapacity int = 30
+@description('Deployment capacity for gpt-4.1-mini in kTPM')
+param gpt41MiniCapacity int = 30
 
 @description('Deployment capacity for text-embedding-3-large in kTPM')
 param embeddingCapacity int = 60
@@ -36,12 +36,12 @@ resource account 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   }
 }
 
-resource depMini 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource depChat 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: account
-  name: 'gpt-4o-mini'
-  sku: { name: deploymentSkuName, capacity: gpt4oMiniCapacity }
+  name: 'gpt-4.1-mini'
+  sku: { name: deploymentSkuName, capacity: gpt41MiniCapacity }
   properties: {
-    model: { format: 'OpenAI', name: 'gpt-4o-mini', version: '2024-07-18' }
+    model: { format: 'OpenAI', name: 'gpt-4.1-mini', version: '2025-04-14' }
     versionUpgradeOption: 'OnceCurrentVersionExpired'
   }
 }
@@ -54,7 +54,7 @@ resource depEmbed 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' 
     model: { format: 'OpenAI', name: 'text-embedding-3-large', version: '1' }
     versionUpgradeOption: 'OnceCurrentVersionExpired'
   }
-  dependsOn: [ depMini ] // serialize to avoid quota contention
+  dependsOn: [ depChat ] // serialize to avoid quota contention
 }
 
 // Cognitive Services OpenAI User

@@ -189,7 +189,7 @@ graph TB
 - **Workers**: Azure Container Apps with KEDA scale rules on Service Bus queue depth.
 - **Data**: Azure SQL DB (General Purpose, Gen5, 4 vCore MVP baseline).
 - **Search**: Azure AI Search (Standard S2 tier — required for vector + semantic ranking at MVP scale).
-- **AI**: Azure OpenAI (`gpt-4o-mini` or `gpt-4o` chat, `text-embedding-3-large` embeddings) — region: Sweden Central or West Europe for EU data residency.
+- **AI**: Azure OpenAI (`gpt-4.1-mini` or `gpt-4o` chat, `text-embedding-3-large` embeddings) — region: Sweden Central or West Europe for EU data residency.
 - **Secrets**: Azure Key Vault, referenced from App Service/Container Apps via Managed Identity.
 
 Full topology in [§11](#11-deployment-architecture).
@@ -1008,7 +1008,7 @@ Full pipeline design (state machine, throughput, resumability) in [§8](#8-disco
   "alternate_categories": [{"category":"BatchAnalysis","confidence":0.05}]
 }
 ```
-- Model: `gpt-4o-mini` by default (cost/latency), configurable to `gpt-4o` for higher-stakes projects (FR-031).
+- Model: `gpt-4.1-mini` by default (cost/latency), configurable to `gpt-4o` for higher-stakes projects (FR-031; see [ADR-020](ADR-020-gpt-4-1-mini-default.md)).
 
 **Confidence score** (FR-015) is persisted with every classification. Values below a configurable threshold (default 0.75) flag the document for manual review in the UI.
 
@@ -1211,7 +1211,7 @@ See detailed design in [§5.4](#54-rag-pipeline-regulatory-copilot).
 - **Users** — read-only view of users who have signed in; role changes performed in Entra ID (single source of truth). Local override table permits disabling a user faster than propagation.
 - **Requirements** — CRUD over the CTD Dossier Templates (§4.3). Admins upload `.docx` or `.yaml`, preview the parsed hierarchy, and publish a new immutable version. Existing projects continue on their locked version; a "Migrate to vX.Y.Z" action shows a delta.
 - **System Configuration** — key/value store with typed sections:
-  - `Ai.Classification.Model` (default: `gpt-4o-mini`)
+  - `Ai.Classification.Model` (default: `gpt-4.1-mini`)
   - `Ai.Classification.ConfidenceThreshold`
   - `Discovery.MaxFileSizeMb`
   - `Discovery.SchedulesCron`
@@ -1403,8 +1403,8 @@ The user always gets a compiled deliverable — the compiler never blocks on gap
 
 | Purpose | Model | Rationale |
 |---|---|---|
-| Classification (LLM path) | `gpt-4o-mini` (Azure OpenAI, EU region) | Cheap, fast, sufficient for classification with structured outputs; upgradable per §4.11. |
-| Summarisation (FR-024) | `gpt-4o-mini` (default) / `gpt-4o` (long docs) | Quality vs. cost trade-off, configurable. |
+| Classification (LLM path) | `gpt-4.1-mini` (Azure OpenAI, EU region) | Cost-efficient model for classification with structured outputs; upgradable per §4.11. |
+| Summarisation (FR-024) | `gpt-4.1-mini` (default) / `gpt-4o` (long docs) | Quality vs. cost trade-off, configurable. |
 | Copilot chat | `gpt-4o` | Superior reasoning + grounding fidelity for regulatory Q&A. |
 | Embeddings | `text-embedding-3-large` (3072 dim) | Best-in-class semantic recall for regulatory language; supports dim reduction to 1536 for cost if needed. |
 | OCR | Azure AI Document Intelligence `prebuilt-read` | Highest accuracy for scanned PDFs; layout model for tabular reports (specifications, CoAs). |
@@ -1422,7 +1422,7 @@ flowchart LR
     D --> E
     E --> F[Rule-Based Pre-Classifier]
     F -->|conf ≥ 0.85| Z[Persist Classification]
-    F -->|ambiguous| G[LLM Classifier<br/>gpt-4o-mini, JSON schema]
+    F -->|ambiguous| G[LLM Classifier<br/>gpt-4.1-mini, JSON schema]
     G --> Z
     Z --> H[Emit ClassificationCompleted event]
 ```
@@ -1447,7 +1447,7 @@ Prompt (excerpt):
 
 ```mermaid
 flowchart TB
-    Q[User Question] --> R1[Query Rewriting<br/>gpt-4o-mini]
+    Q[User Question] --> R1[Query Rewriting<br/>gpt-4.1-mini]
     R1 --> R2[Query Expansion<br/>synonyms, acronyms]
     R2 --> V[Embed query<br/>text-embedding-3-large]
     V --> H[Hybrid Retrieval<br/>Azure AI Search:<br/>vector + BM25 + semantic ranker]
@@ -2701,7 +2701,7 @@ Full ADRs live in `docs/adr/`. Summaries below.
 | R3 | Data residency for AI processing | Legal / GDPR | Azure OpenAI + Search in EU regions only; Data-processing addendum with customer |
 | R4 | OCR accuracy on low-quality scans | Classification errors | Doc Intelligence read model + confidence surfaced; manual override available |
 | R5 | Classification drift as taxonomy expands | Accuracy regression | Nightly regression on labelled corpus; taxonomy versioned |
-| R6 | Cost of gpt-4o at scale | Budget | Default classification on gpt-4o-mini; per-tenant token quotas; budget alerts |
+| R6 | Cost of gpt-4o at scale | Budget | Default classification on gpt-4.1-mini; per-tenant token quotas; budget alerts |
 | R7 | 1M-doc index rebuild during schema change | Downtime | Blue/green index (`v1` → `v2`) with dual-write window |
 | R8 | Windows-only distribution | User reach | Deferred; API-first architecture keeps future web/mobile viable |
 
