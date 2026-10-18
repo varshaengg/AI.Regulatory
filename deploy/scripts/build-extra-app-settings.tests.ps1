@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+$originalExitCode = $global:LASTEXITCODE
 $scriptPath = Join-Path $PSScriptRoot 'build-extra-app-settings.ps1'
 $outFile = Join-Path ([IO.Path]::GetTempPath()) "ara-settings-test-$([guid]::NewGuid()).json"
 
@@ -59,4 +60,5 @@ try {
 } finally {
     if (Test-Path $outFile) { Remove-Item -LiteralPath $outFile }
     Remove-Item Env:\ARA_SETTINGS_TEST_EXIT_CODE -ErrorAction SilentlyContinue
+    $global:LASTEXITCODE = $originalExitCode
 }
