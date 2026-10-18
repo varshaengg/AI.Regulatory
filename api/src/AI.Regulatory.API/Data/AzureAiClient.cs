@@ -22,7 +22,7 @@ public sealed class AzureAiClient
         _http = http;
         _diEndpoint = cfg["DocumentIntelligence:Endpoint"]!.TrimEnd('/');
         _aoaiEndpoint = cfg["AzureOpenAi:Endpoint"]!.TrimEnd('/');
-        _deployment = cfg["AzureOpenAi:ChatDeployment"] ?? "gpt-4o-mini";
+        _deployment = cfg["AzureOpenAi:ChatDeployment"] ?? "gpt-4.1-mini";
     }
 
     public static bool IsConfigured(IConfiguration cfg)
