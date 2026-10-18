@@ -132,8 +132,12 @@ var midName    = name(kindShort, 'managedIdentity', namePrefix, 'workload')
 // -------------------------------------------------------------------------
 // Modules — deployed conditionally based on `resources` catalog
 // -------------------------------------------------------------------------
+// Scope ARM child deployment records to this parent run so an active prior run
+// cannot block retries; resource names remain stable for incremental updates.
+var moduleDeploymentSuffix = uniqueString(deployment().name)
+
 module monitoring 'modules/monitoring.bicep' = if (wantLogAnalytics || wantAppInsights) {
-  name: 'mod-monitoring'
+  name: 'mod-monitoring-${moduleDeploymentSuffix}'
   params: {
     logAnalyticsName: logName
     appInsightsName:  appiName
@@ -144,7 +148,7 @@ module monitoring 'modules/monitoring.bicep' = if (wantLogAnalytics || wantAppIn
 }
 
 module workloadIdentity 'modules/managed-identity.bicep' = if (wantWorkloadIdentity) {
-  name: 'mod-workload-identity'
+  name: 'mod-workload-identity-${moduleDeploymentSuffix}'
   params: {
     identityName: midName
     location:     location
@@ -153,7 +157,7 @@ module workloadIdentity 'modules/managed-identity.bicep' = if (wantWorkloadIdent
 }
 
 module keyvault 'modules/keyvault.bicep' = if (wantKeyVault) {
-  name: 'mod-keyvault'
+  name: 'mod-keyvault-${moduleDeploymentSuffix}'
   params: {
     keyVaultName:                 kvName
     location:                     location
@@ -166,7 +170,7 @@ module keyvault 'modules/keyvault.bicep' = if (wantKeyVault) {
 }
 
 module storage 'modules/storage.bicep' = if (wantStorage) {
-  name: 'mod-storage'
+  name: 'mod-storage-${moduleDeploymentSuffix}'
   params: {
     storageBaseName:          stName
     location:                 location
@@ -179,7 +183,7 @@ module storage 'modules/storage.bicep' = if (wantStorage) {
 }
 
 module sql 'modules/sql.bicep' = if (wantSql) {
-  name: 'mod-sql'
+  name: 'mod-sql-${moduleDeploymentSuffix}'
   params: {
     sqlServerName:            sqlName
     location:                 empty(sqlLocation) ? location : sqlLocation
@@ -194,7 +198,7 @@ module sql 'modules/sql.bicep' = if (wantSql) {
 }
 
 module search 'modules/search.bicep' = if (wantSearch) {
-  name: 'mod-search'
+  name: 'mod-search-${moduleDeploymentSuffix}'
   params: {
     searchName:               srchName
     location:                 location
@@ -208,7 +212,7 @@ module search 'modules/search.bicep' = if (wantSearch) {
 }
 
 module openai 'modules/openai.bicep' = if (wantOpenAi) {
-  name: 'mod-openai'
+  name: 'mod-openai-${moduleDeploymentSuffix}'
   params: {
     openAiName:               oaiName
     location:                 empty(openAiLocation) ? location : openAiLocation
@@ -220,7 +224,7 @@ module openai 'modules/openai.bicep' = if (wantOpenAi) {
 }
 
 module serviceBus 'modules/servicebus.bicep' = if (wantServiceBus) {
-  name: 'mod-servicebus'
+  name: 'mod-servicebus-${moduleDeploymentSuffix}'
   params: {
     serviceBusName:              sbName
     location:                    location
@@ -233,7 +237,7 @@ module serviceBus 'modules/servicebus.bicep' = if (wantServiceBus) {
 }
 
 module docIntel 'modules/documentintelligence.bicep' = if (wantDocIntel) {
-  name: 'mod-documentintelligence'
+  name: 'mod-documentintelligence-${moduleDeploymentSuffix}'
   params: {
     documentIntelligenceName:    diName
     location:                    empty(docIntelLocation) ? location : docIntelLocation
@@ -245,7 +249,7 @@ module docIntel 'modules/documentintelligence.bicep' = if (wantDocIntel) {
 }
 
 module plan 'modules/appserviceplan.bicep' = if (wantAppPlan) {
-  name: 'mod-appserviceplan'
+  name: 'mod-appserviceplan-${moduleDeploymentSuffix}'
   params: {
     planName:      planName
     location:      location
@@ -261,7 +265,7 @@ module plan 'modules/appserviceplan.bicep' = if (wantAppPlan) {
 // feature gets a Linux container (the API and future *api services).
 // -------------------------------------------------------------------------
 module appServices 'modules/appservice.bicep' = [for (svc, i) in appServiceEntries: {
-  name: 'mod-app-${svc.feature}'
+  name: 'mod-app-${svc.feature}-${moduleDeploymentSuffix}'
   params: {
     appServiceName:     '${kindShort.appService}-${namePrefix}-${svc.feature}'
     location:           location
