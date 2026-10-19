@@ -63,6 +63,7 @@ var isContainer  = !empty(containerImage)
 var linuxFxValue = isContainer
                    ? 'DOCKER|${containerImage}'
                    : (isWeb ? 'NODE|${nodeVersion}' : 'DOTNETCORE|${dotnetVersion}')
+var stackCommandLine = isWeb ? stackStartupCommand : (feature == 'worker' ? 'dotnet AI.Regulatory.Worker.dll' : '')
 
 // Shared base app settings; the web app doesn't need SQL/OpenAI refs.
 var baseAppSettings = [
@@ -105,7 +106,7 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
     keyVaultReferenceIdentity: kvRefIdentity
     siteConfig: {
       linuxFxVersion: linuxFxValue
-      appCommandLine: isContainer ? '' : (isWeb ? stackStartupCommand : '')
+      appCommandLine: isContainer ? '' : stackCommandLine
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
       http20Enabled: true
@@ -130,7 +131,7 @@ resource staging 'Microsoft.Web/sites/slots@2024-04-01' = if (!isWeb && enableSt
     keyVaultReferenceIdentity: kvRefIdentity
     siteConfig: {
       linuxFxVersion: linuxFxValue
-      appCommandLine: isContainer ? '' : ''
+      appCommandLine: isContainer ? '' : stackCommandLine
       minTlsVersion: '1.2'
       healthCheckPath: '/health/live'
       appSettings: appSettings

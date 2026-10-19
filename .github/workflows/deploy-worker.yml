@@ -18,6 +18,7 @@ on:
       - 'api/**'
       - 'deploy/config/appsettings.worker.code.*.json'
       - 'deploy/scripts/apply-appsettings.ps1'
+      - 'deploy/scripts/test-app-health.ps1'
       - '.github/workflows/deploy-worker.yml'
 
 permissions:
@@ -67,7 +68,7 @@ jobs:
         run: |
           set -e
           LATEST=$(az deployment sub list \
-            --query "sort_by([?starts_with(name, 'ara-${TARGET_ENV}-')], &properties.timestamp)[-1].name" \
+            --query "sort_by([?starts_with(name, 'ara-${TARGET_ENV}-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" \
             -o tsv || true)
           if [ -z "$LATEST" ]; then
             RG="${{ secrets.AZURE_RESOURCE_GROUP_NAME }}"
@@ -98,6 +99,7 @@ jobs:
           app-name:            ${{ steps.lookup.outputs.worker }}
           resource-group-name: ${{ steps.lookup.outputs.rg }}
           package:             ./artifacts/worker.zip
+          startup-command:     'dotnet AI.Regulatory.Worker.dll'
 
       - name: Deploy Worker zip (staging slot — non-dev)
         if: env.TARGET_ENV != 'dev'
@@ -107,6 +109,15 @@ jobs:
           slot-name:           staging
           resource-group-name: ${{ steps.lookup.outputs.rg }}
           package:             ./artifacts/worker.zip
+          startup-command:     'dotnet AI.Regulatory.Worker.dll'
+
+      - name: Check worker runtime health
+        shell: pwsh
+        run: |
+          $slotArgs = if ($env:TARGET_ENV -eq 'dev') { @() } else { @('--slot', 'staging') }
+          $hostName = az webapp show -g '${{ steps.lookup.outputs.rg }}' -n '${{ steps.lookup.outputs.worker }}' @slotArgs --query defaultHostName -o tsv
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve worker hostname.' }
+          ./deploy/scripts/test-app-health.ps1 -BaseUrl "https://$hostName" -Paths '/health/live'
 
       - name: Blue/Green slot swap (non-dev)
         if: env.TARGET_ENV != 'dev'

@@ -190,20 +190,12 @@ jobs:
           package:  ./artifacts/web.zip
 
       - name: Smoke test API
+        shell: pwsh
         run: |
-          set -e
-          if [ "$TARGET_ENV" = "dev" ]; then
-            HOST=$(az webapp show -g "${{ steps.lookup.outputs.rg }}" -n "${{ steps.lookup.outputs.api }}" --query defaultHostName -o tsv)
-          else
-            HOST=$(az webapp show -g "${{ steps.lookup.outputs.rg }}" -n "${{ steps.lookup.outputs.api }}" --slot staging --query defaultHostName -o tsv)
-          fi
-          for path in /health/live /health/ready; do
-            code=$(curl -sk -o /dev/null -w "%{http_code}" "https://$HOST$path")
-            if [ "$code" != "200" ]; then
-              echo "Smoke test failed: $path => $code"; exit 1
-            fi
-          done
-          echo "Smoke tests passed."
+          $slotArgs = if ($env:TARGET_ENV -eq 'dev') { @() } else { @('--slot', 'staging') }
+          $hostName = az webapp show -g '${{ steps.lookup.outputs.rg }}' -n '${{ steps.lookup.outputs.api }}' @slotArgs --query defaultHostName -o tsv
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve API hostname.' }
+          ./deploy/scripts/test-app-health.ps1 -BaseUrl "https://$hostName"
 
       - name: Blue/Green slot swap (non-dev)
         if: ${{ (github.event_name != 'workflow_dispatch' || inputs.deploy_api != false) && env.TARGET_ENV != 'dev' }}
