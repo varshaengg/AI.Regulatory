@@ -44,16 +44,16 @@ jobs:
         id: cfg
         shell: pwsh
         run: |
-          $rg = ''; $apiApp = ''; $webApp = ''
+          $rg = ''; $apiApp = ''; $webApp = ''; $workerApp = ''
           $latest = az deployment sub list `
             --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
             -o tsv 2>$null
           if ($latest) {
             $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
             $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
-            $apiApp = "app-$np-api"; $webApp = "app-$np-web"
+            $apiApp = "app-$np-api"; $webApp = "app-$np-web"; $workerApp = "app-$np-worker"
           }
-          $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+          $nameMap = @{ api = $apiApp; web = $webApp; worker = $workerApp } | ConvertTo-Json -Compress
           $out = "$env:RUNNER_TEMP/extra.json"
           & ./deploy/scripts/build-extra-app-settings.ps1 `
             -TargetEnv     $env:TARGET_ENV `
@@ -115,16 +115,16 @@ jobs:
         id: cfg
         shell: pwsh
         run: |
-          $rg = ''; $apiApp = ''; $webApp = ''
+          $rg = ''; $apiApp = ''; $webApp = ''; $workerApp = ''
           $latest = az deployment sub list `
             --query "sort_by([?starts_with(name, 'ara-$env:TARGET_ENV-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
             -o tsv 2>$null
           if ($latest) {
             $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
             $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
-            $apiApp = "app-$np-api"; $webApp = "app-$np-web"
+            $apiApp = "app-$np-api"; $webApp = "app-$np-web"; $workerApp = "app-$np-worker"
           }
-          $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+          $nameMap = @{ api = $apiApp; web = $webApp; worker = $workerApp } | ConvertTo-Json -Compress
           $out = "$env:RUNNER_TEMP/extra.json"
           & ./deploy/scripts/build-extra-app-settings.ps1 `
             -TargetEnv     $env:TARGET_ENV `

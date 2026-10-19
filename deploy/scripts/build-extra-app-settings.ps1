@@ -4,8 +4,8 @@
     Build the Bicep `extraAppSettingsMap` object for an environment.
 
 .DESCRIPTION
-    For every deploy/config/appsettings.<feature>.infra.<env>.json in this
-    repo, produce { <feature>: [ {name, value}, ... ] }.
+    For every feature with an infra or code settings file in this repo,
+    produce { <feature>: [ {name, value}, ... ] }.
 
     Additionally, to prevent Bicep's `siteConfig.appSettings` collection
     replace from wiping settings that are owned by the code pipeline
@@ -44,10 +44,18 @@ $nameMap = @{}
 if ($AppNameMap) { $nameMap = $AppNameMap | ConvertFrom-Json -AsHashtable }
 
 $map = @{}
-Get-ChildItem $cfgDir -Filter "appsettings.*.infra.$TargetEnv.json" -ErrorAction SilentlyContinue | ForEach-Object {
-    $feature = ($_.BaseName -replace "^appsettings\.", "" -replace "\.infra\.$TargetEnv$", "")
-    Write-Host "[$feature] infra settings from $($_.Name)"
-    $infraSettings = @(Get-Content $_.FullName -Raw | ConvertFrom-Json)
+$features = Get-ChildItem $cfgDir -Filter "appsettings.*.$TargetEnv.json" |
+    Where-Object BaseName -Match "\.(infra|code)\.$TargetEnv$" |
+    ForEach-Object { $_.BaseName -replace "^appsettings\.", "" -replace "\.(infra|code)\.$TargetEnv$", "" } |
+    Sort-Object -Unique
+$features | ForEach-Object {
+    $feature = $_
+    $infraFile = Join-Path $cfgDir "appsettings.$feature.infra.$TargetEnv.json"
+    $infraSettings = @()
+    if (Test-Path $infraFile) {
+        Write-Host "[$feature] infra settings from $(Split-Path $infraFile -Leaf)"
+        $infraSettings = @(Get-Content $infraFile -Raw | ConvertFrom-Json)
+    }
 
     # Determine code-owned keys for this feature: names from the paired code file (if any).
     $codeFile = Join-Path $cfgDir "appsettings.$feature.code.$TargetEnv.json"

@@ -53,7 +53,7 @@ stages:
             inlineScript: |
               # Look up existing app names (if any) so the script can preserve
               # code-owned settings (feature flags etc.) through the Bicep replace.
-              $rg = ''; $apiApp = ''; $webApp = ''
+              $rg = ''; $apiApp = ''; $webApp = ''; $workerApp = ''
               $latest = az deployment sub list `
                 --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
                 -o tsv 2>$null
@@ -63,10 +63,11 @@ stages:
                 $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
                 $apiApp = "app-$np-api"
                 $webApp = "app-$np-web"
+                $workerApp = "app-$np-worker"
               } else {
                 Write-Host "Cold start — using seed values from *.code.<env>.json files."
               }
-              $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+              $nameMap = @{ api = $apiApp; web = $webApp; worker = $workerApp } | ConvertTo-Json -Compress
               $out = "$(Agent.TempDirectory)/extra.json"
               & "$(Build.SourcesDirectory)/deploy/scripts/build-extra-app-settings.ps1" `
                 -TargetEnv     '${{ parameters.targetEnv }}' `
@@ -118,16 +119,16 @@ stages:
                   scriptType: pscore
                   scriptLocation: inlineScript
                   inlineScript: |
-                    $rg = ''; $apiApp = ''; $webApp = ''
+                    $rg = ''; $apiApp = ''; $webApp = ''; $workerApp = ''
                     $latest = az deployment sub list `
                       --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" `
                       -o tsv 2>$null
                     if ($latest) {
                       $rg    = az deployment sub show --name $latest --query "properties.outputs.resourceGroupName.value" -o tsv
                       $np    = az deployment sub show --name $latest --query "properties.outputs.namePrefix.value"        -o tsv
-                      $apiApp = "app-$np-api"; $webApp = "app-$np-web"
+                      $apiApp = "app-$np-api"; $webApp = "app-$np-web"; $workerApp = "app-$np-worker"
                     }
-                    $nameMap = @{ api = $apiApp; web = $webApp } | ConvertTo-Json -Compress
+                    $nameMap = @{ api = $apiApp; web = $webApp; worker = $workerApp } | ConvertTo-Json -Compress
                     $out = "$(Agent.TempDirectory)/extra.json"
                     & "$(Build.SourcesDirectory)/deploy/scripts/build-extra-app-settings.ps1" `
                       -TargetEnv     '${{ parameters.targetEnv }}' `

@@ -27,6 +27,10 @@ values of code-owned keys and passes them into `extraAppSettingsMap` too, so
 Bicep's collection-replace never wipes them. Cold start uses the seed values
 from the code file.
 
+Features with only a `code` file are included too; an empty `infra` file is not
+required. Both infra pipelines resolve the worker app alongside API and web
+so its live code-owned settings survive a collection replacement.
+
 The merge emits one entry per setting name. If a key appears in both scope
 files, the preserved code-owned value wins. A live-settings read failure stops
 the pipeline rather than silently replacing values with seeds. Infra discovery

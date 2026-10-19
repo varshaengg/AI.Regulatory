@@ -15,7 +15,7 @@ function Assert-UniqueSettings($settings) {
 function az {
     $global:LASTEXITCODE = [int]$env:ARA_SETTINGS_TEST_EXIT_CODE
     if ($global:LASTEXITCODE -eq 0) {
-        '[{"name":"EntraId__Audience","value":"api://test-live-audience"}]'
+        '[{"name":"EntraId__Audience","value":"api://test-live-audience"},{"name":"ConnectionStrings__ArtaSql","value":"test-live-worker-sql"}]'
     }
 }
 
@@ -26,12 +26,15 @@ try {
     if (@($settings.api | Where-Object name -eq 'EntraId__Audience').Count -ne 1) {
         throw 'Cold-start settings must contain exactly one audience.'
     }
+    if (@($settings.worker | Where-Object name -eq 'ConnectionStrings__ArtaSql').Count -ne 1) {
+        throw 'Code-only worker settings must be included on cold start.'
+    }
 
     $env:ARA_SETTINGS_TEST_EXIT_CODE = '0'
     $liveArgs = @{
         TargetEnv = 'dev'
         ResourceGroup = 'rg-test'
-        AppNameMap = '{"api":"app-test-api"}'
+        AppNameMap = '{"api":"app-test-api","worker":"app-test-worker"}'
         OutFile = $outFile
     }
     & $scriptPath @liveArgs
@@ -40,6 +43,10 @@ try {
     $audience = $settings.api | Where-Object name -eq 'EntraId__Audience'
     if ($audience.value -ne 'api://test-live-audience') {
         throw 'The live code-owned audience must override the infra seed.'
+    }
+    $workerSql = $settings.worker | Where-Object name -eq 'ConnectionStrings__ArtaSql'
+    if ($workerSql.value -ne 'test-live-worker-sql') {
+        throw 'Code-only worker settings must preserve the live SQL value.'
     }
     if ($settings.web.Count -ne 0) {
         throw 'Empty web settings must remain a JSON array.'
