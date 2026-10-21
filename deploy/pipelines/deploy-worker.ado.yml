@@ -1,0 +1,150 @@
+# Worker-only deployment. Manual to avoid racing the GitHub worker workflow.
+name: ARA-Worker-$(Date:yyyyMMdd)$(Rev:.rr)
+
+trigger: none
+pr: none
+
+parameters:
+  - name: targetEnv
+    displayName: 'Target environment'
+    type: string
+    default: 'dev'
+    values: [ dev, test, uat, prod ]
+
+variables:
+  - group: ara-deploy
+
+stages:
+- stage: BuildWorker
+  displayName: 'Build Worker'
+  jobs:
+    - job: BuildWorker
+      pool: { vmImage: 'ubuntu-latest' }
+      steps:
+        - checkout: self
+        - task: UseDotNet@2
+          inputs: { packageType: 'sdk', version: '8.0.x' }
+        - script: |
+            dotnet publish api/src/AI.Regulatory.Worker/AI.Regulatory.Worker.csproj \
+              -c Release -warnaserror -o "$(Build.ArtifactStagingDirectory)/worker"
+          displayName: 'Build and publish Worker'
+        - task: ArchiveFiles@2
+          inputs:
+            rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/worker'
+            includeRootFolder: false
+            archiveType: 'zip'
+            archiveFile: '$(Build.ArtifactStagingDirectory)/worker.zip'
+        - publish: '$(Build.ArtifactStagingDirectory)/worker.zip'
+          artifact: worker-package
+
+- stage: DeployWorker
+  displayName: 'Deploy Worker'
+  dependsOn: BuildWorker
+  jobs:
+    - deployment: DeployWorker
+      environment: 'ara-${{ parameters.targetEnv }}'
+      pool: { vmImage: 'ubuntu-latest' }
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - checkout: self
+              - download: current
+                artifact: worker-package
+              - task: AzureCLI@2
+                name: lookup
+                displayName: 'Resolve Worker from latest infra outputs'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    set -euo pipefail
+                    LATEST=$(az deployment sub list \
+                      --query "sort_by([?starts_with(name, 'ara-${{ parameters.targetEnv }}-') && properties.outputs.resourceGroupName.value != null && properties.outputs.namePrefix.value != null], &properties.timestamp)[-1].name" \
+                      -o tsv)
+                    if [ -z "$LATEST" ]; then
+                      echo "ERROR: No infra outputs found. Run ARA - Infra first."
+                      exit 1
+                    fi
+                    RG=$(az deployment sub show --name "$LATEST" --query "properties.outputs.resourceGroupName.value" -o tsv)
+                    NP=$(az deployment sub show --name "$LATEST" --query "properties.outputs.namePrefix.value" -o tsv)
+                    if [ -z "$RG" ] || [ -z "$NP" ]; then
+                      echo "ERROR: Infra outputs are incomplete."
+                      exit 1
+                    fi
+                    echo "##vso[task.setvariable variable=rgName;isOutput=true]$RG"
+                    echo "##vso[task.setvariable variable=workerAppName;isOutput=true]app-$NP-worker"
+
+              - task: AzureCLI@2
+                displayName: 'Apply code-owned Worker settings to target slot'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    $ErrorActionPreference = 'Stop'
+                    $slot = if ('${{ parameters.targetEnv }}' -eq 'dev') { '' } else { 'staging' }
+                    & "$(Build.SourcesDirectory)/deploy/scripts/apply-appsettings.ps1" `
+                      -ResourceGroup "$(lookup.rgName)" `
+                      -AppName "$(lookup.workerAppName)" `
+                      -EnvName "${{ parameters.targetEnv }}" `
+                      -App "worker" -Slot $slot
+                    if ($LASTEXITCODE -ne 0) { throw 'Applying Worker settings failed.' }
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy Worker (production slot - dev)'
+                condition: and(succeeded(), eq('${{ parameters.targetEnv }}', 'dev'))
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  appType: webAppLinux
+                  appName: '$(lookup.workerAppName)'
+                  resourceGroupName: '$(lookup.rgName)'
+                  package: '$(Pipeline.Workspace)/worker-package/worker.zip'
+                  deploymentMethod: zipDeploy
+                  startUpCommand: 'dotnet AI.Regulatory.Worker.dll'
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy Worker (staging slot - non-dev)'
+                condition: and(succeeded(), ne('${{ parameters.targetEnv }}', 'dev'))
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  appType: webAppLinux
+                  appName: '$(lookup.workerAppName)'
+                  resourceGroupName: '$(lookup.rgName)'
+                  package: '$(Pipeline.Workspace)/worker-package/worker.zip'
+                  deploymentMethod: zipDeploy
+                  startUpCommand: 'dotnet AI.Regulatory.Worker.dll'
+                  deployToSlotOrASE: true
+                  slotName: staging
+
+              - task: AzureCLI@2
+                displayName: 'Require healthy Worker before promotion'
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    $ErrorActionPreference = 'Stop'
+                    $slotArgs = if ('${{ parameters.targetEnv }}' -eq 'dev') { @() } else { @('--slot', 'staging') }
+                    $hostName = az webapp show -g "$(lookup.rgName)" -n "$(lookup.workerAppName)" @slotArgs --query defaultHostName -o tsv
+                    if ($LASTEXITCODE -ne 0 -or !$hostName) { throw 'Cannot resolve Worker hostname.' }
+                    & "$(Build.SourcesDirectory)/deploy/scripts/test-app-health.ps1" `
+                      -BaseUrl "https://$hostName" -Paths '/health/live'
+
+              - task: AzureCLI@2
+                displayName: 'Swap staging to production and verify (non-dev)'
+                condition: and(succeeded(), ne('${{ parameters.targetEnv }}', 'dev'))
+                inputs:
+                  azureSubscription: $(azureSubscription)
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    $ErrorActionPreference = 'Stop'
+                    az webapp deployment slot swap --resource-group "$(lookup.rgName)" `
+                      --name "$(lookup.workerAppName)" --slot staging --target-slot production --output none
+                    if ($LASTEXITCODE -ne 0) { throw 'Worker slot swap failed.' }
+                    $hostName = az webapp show -g "$(lookup.rgName)" -n "$(lookup.workerAppName)" --query defaultHostName -o tsv
+                    if ($LASTEXITCODE -ne 0 -or !$hostName) { throw 'Cannot resolve production Worker hostname.' }
+                    & "$(Build.SourcesDirectory)/deploy/scripts/test-app-health.ps1" `
+                      -BaseUrl "https://$hostName" -Paths '/health/live'

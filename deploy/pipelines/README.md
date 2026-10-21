@@ -5,7 +5,7 @@ infra from `deploy/bicep/main.bicep`, apply per-env app-settings from
 `deploy/config/appsettings.<app>.<env>.json` via
 `deploy/scripts/apply-appsettings.ps1`, deploy the API + Web zips, and smoke test.
 
-Each CI system has **three independent pipelines** — infra, code, and SQL —
+Each CI system has **four independent deployment pipelines** — infra, code, SQL and worker —
 so you can iterate on schema/SPA/API without re-running everything.
 
 | Purpose | GitHub Actions | Azure DevOps |
@@ -13,6 +13,7 @@ so you can iterate on schema/SPA/API without re-running everything.
 | Infra (Bicep what-if + deploy)          | `.github/workflows/deploy-infra.yml` | `deploy/pipelines/deploy-infra.ado.yml` |
 | Code (build + zip deploy + smoke + swap)| `.github/workflows/deploy-code.yml`  | `deploy/pipelines/deploy-code.ado.yml`  |
 | SQL (DACPAC build + publish + seed)     | `.github/workflows/deploy-sql.yml`   | `deploy/pipelines/deploy-sql.ado.yml`   |
+| Worker (build + settings + deploy + health) | `.github/workflows/deploy-worker.yml` | `deploy/pipelines/deploy-worker.ado.yml` |
 
 Path filters:
 
@@ -20,6 +21,7 @@ Path filters:
 - **Code** pipelines trigger on `api/**`, `src/**`, `deploy/config/**`,
   `deploy/scripts/**`, `package*.json` (plus their own YAML).
 - **SQL** pipelines trigger on `data/sql/**` (plus their own YAML).
+- **Worker** in ADO is manual-only; GitHub Worker retains its path-filtered trigger.
 
 Cold start order: **infra → sql → code**. The code pipeline resolves resource
 names by reading the outputs of the most recent `ara-<env>-*` subscription-scope
@@ -75,6 +77,27 @@ or both. They read the same Bicep, config, and scripts.
 
 **Trigger:** push to `main` (auto-detected by ADO) or run manually from
 Pipelines UI with `targetEnv` parameter.
+
+### ARA - Worker
+
+Requirement: provide a separate ADO worker deployment without redeploying API,
+SPA or SQL. The approved setup is manual-only to avoid simultaneous deployment
+with the GitHub Worker workflow.
+
+Register `deploy/pipelines/deploy-worker.ado.yml` as **ARA - Worker**, using the
+same GitHub connection as ARA - Code. Authorize the `ara-deploy` variable group
+and its `azureSubscription` service connection for the new pipeline. The existing
+`ara-<env>` deployment environment supplies approval checks where configured.
+Run from **Pipelines -> ARA - Worker -> Run pipeline**, selecting `targetEnv`.
+Do not run it while GitHub is deploying the same Worker.
+
+Acceptance criteria: publish only the Worker package; resolve the Worker from
+infra outputs; upsert only worker code-owned settings on the target slot; set
+`dotnet AI.Regulatory.Worker.dll` explicitly; fail on unhealthy `/health/live`;
+and, outside dev, check staging before swap and production afterward.
+Dev deploys directly because its App Service plan has no slots. Non-dev requires
+a provisioned staging slot. Liveness does not prove queue/SQL/AI integration.
+This pipeline does not deploy infrastructure or schema.
 
 ---
 
